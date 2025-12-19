@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Send, MessageSquare, AlertCircle, CheckCircle, MessagesSquare, Bug, Search, Sparkles } from 'lucide-react';
+import { X } from 'lucide-react';
 
 /**
  * Feedback Modal Component
@@ -19,10 +19,10 @@ export default function FeedbackModal({ isOpen, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const feedbackTypes = [
-    { value: 'feedback', label: 'General Feedback', icon: MessagesSquare },
-    { value: 'bug', label: 'Bug Report', icon: Bug },
-    { value: 'missing_pii', label: 'Missed PII Detection', icon: Search },
-    { value: 'improvement', label: 'Feature Request', icon: Sparkles }
+    { value: 'feedback', label: 'General Feedback' },
+    { value: 'bug', label: 'Bug Report' },
+    { value: 'missing_pii', label: 'Missed PII Detection' },
+    { value: 'improvement', label: 'Feature Request' }
   ];
 
   const handleSubmit = async (e) => {
@@ -123,31 +123,27 @@ export default function FeedbackModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-lg my-8 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full border border-zinc-800 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800">\n          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-500/10 rounded-lg">
-              <MessageSquare className="w-6 h-6 text-red-500" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">Send Feedback</h2>
-              <p className="text-sm text-zinc-400">Help us improve Redactify</p>
-            </div>
+        <div className="flex items-center justify-between p-8 border-b border-zinc-800">
+          <div>
+            <h2 className="text-2xl font-bold text-white tracking-tight">Send Feedback</h2>
+            <p className="text-sm text-zinc-400 mt-1">Help us improve Redactify</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+            className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full transition-colors"
           >
-            <X className="w-5 h-5 text-zinc-400" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6">
           {/* Feedback Type */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">
+            <label className="block text-xs font-bold text-white uppercase tracking-wider mb-2">
               What's this about?
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -156,22 +152,17 @@ export default function FeedbackModal({ isOpen, onClose }) {
                   key={type.value}
                   type="button"
                   onClick={() => setFormData({ ...formData, type: type.value })}
-                  className={`p-3 rounded-lg border-2 transition-all text-left ${
+                  className={`p-3 rounded-xl border transition-all text-left ${
                     formData.type === type.value
                       ? 'border-red-500 bg-red-500/10'
-                      : 'border-zinc-800 bg-zinc-800/50 hover:border-zinc-700'
+                      : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <type.icon className={`w-4 h-4 ${
-                      formData.type === type.value ? 'text-red-500' : 'text-zinc-400'
-                    }`} />
-                    <span className={`text-sm font-medium ${
-                      formData.type === type.value ? 'text-white' : 'text-zinc-400'
-                    }`}>
-                      {type.label}
-                    </span>
-                  </div>
+                  <span className={`text-sm font-medium ${
+                    formData.type === type.value ? 'text-white' : 'text-zinc-400'
+                  }`}>
+                    {type.label}
+                  </span>
                 </button>
               ))}
             </div>
@@ -179,21 +170,21 @@ export default function FeedbackModal({ isOpen, onClose }) {
 
           {/* Email (optional) */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">
-              Your Email <span className="text-zinc-500 text-xs">(optional)</span>
+            <label className="block text-xs font-bold text-white uppercase tracking-wider mb-2">
+              Your Email <span className="text-zinc-500">(optional)</span>
             </label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="your.email@example.com"
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
             />
           </div>
 
           {/* Subject */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">
+            <label className="block text-xs font-bold text-white uppercase tracking-wider mb-2">
               Subject
             </label>
             <input
@@ -201,20 +192,21 @@ export default function FeedbackModal({ isOpen, onClose }) {
               value={formData.subject}
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               placeholder="Brief summary"
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
             />
           </div>
 
           {/* If PII Detection issue, ask what was missed */}
+          {/* PII Type (conditional) */}
           {formData.type === 'missing_pii' && (
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-2">
+              <label className="block text-xs font-bold text-white uppercase tracking-wider mb-2">
                 What type of PII was missed?
               </label>
               <select
                 value={formData.attachmentType}
                 onChange={(e) => setFormData({ ...formData, attachmentType: e.target.value })}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
               >
                 <option value="">Select type...</option>
                 <option value="name">Name</option>
@@ -232,7 +224,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
 
           {/* Message */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">
+            <label className="block text-xs font-bold text-white uppercase tracking-wider mb-2">
               Details
             </label>
             <textarea
@@ -246,23 +238,18 @@ export default function FeedbackModal({ isOpen, onClose }) {
                   : 'Share your thoughts...'
               }
               rows={4}
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all resize-none"
+              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 transition-all resize-none"
             />
           </div>
 
           {/* Status Message */}
           {status.message && (
-            <div className={`p-3 rounded-lg flex items-start gap-2 ${
+            <div className={`p-4 rounded-xl ${
               status.type === 'success' 
                 ? 'bg-green-500/10 border border-green-500/20' 
                 : 'bg-red-500/10 border border-red-500/20'
             }`}>
-              {status.type === 'success' ? (
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              )}
-              <p className={`text-xs ${
+              <p className={`text-sm ${
                 status.type === 'success' ? 'text-green-300' : 'text-red-300'
               }`}>
                 {status.message}
@@ -274,19 +261,9 @@ export default function FeedbackModal({ isOpen, onClose }) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+            className="w-full py-4 bg-red-500 text-white font-bold rounded-full hover:bg-red-600 disabled:bg-zinc-700 disabled:cursor-not-allowed transition-colors"
           >
-            {isSubmitting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                Send Feedback
-              </>
-            )}
+            {isSubmitting ? 'Sending...' : 'Send Feedback'}
           </button>
 
           {/* Privacy Note */}
