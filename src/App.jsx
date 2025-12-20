@@ -24,7 +24,7 @@ function App() {
   const [showCustomRules, setShowCustomRules] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024); // Start closed on mobile
   const [isPro, setIsPro] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -270,7 +270,7 @@ function App() {
       <div 
         ref={scrollContainerRef}
         className={`flex-1 relative flex flex-col ${
-          currentView === 'redactor' ? 'overflow-hidden pt-12' : 'overflow-y-auto'
+          currentView === 'redactor' ? 'overflow-hidden pt-12 md:pt-12' : 'overflow-y-auto pt-16 md:pt-0'
         }`} 
         data-scroll-container
       >
@@ -287,16 +287,24 @@ function App() {
 
             {/* Sidebar - responsive */}
             {sidebarOpen && (
-              <div className="absolute lg:relative right-0 top-0 bottom-0 z-40 lg:z-0 h-full shadow-2xl lg:shadow-none flex flex-col">
-                <Sidebar
-                  piiItems={detectedPII}
-                  onTogglePII={handleTogglePII}
-                  originalText={originalText}
-                  onUpgradeClick={() => setShowProModal(true)}
-                  uploadedFile={uploadedFile}
-                  fileType={fileType}
+              <>
+                {/* Mobile backdrop */}
+                <div 
+                  className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden"
+                  onClick={() => setSidebarOpen(false)}
                 />
-              </div>
+                <div className="fixed lg:relative inset-0 lg:inset-auto lg:right-0 lg:top-0 lg:bottom-0 z-40 lg:z-0 h-full shadow-2xl lg:shadow-none flex flex-col">
+                  <Sidebar
+                    piiItems={detectedPII}
+                    onTogglePII={handleTogglePII}
+                    originalText={originalText}
+                    onUpgradeClick={() => setShowProModal(true)}
+                    uploadedFile={uploadedFile}
+                    fileType={fileType}
+                    onClose={() => setSidebarOpen(false)}
+                  />
+                </div>
+              </>
             )}
           </div>
         )}

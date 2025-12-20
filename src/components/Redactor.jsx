@@ -224,7 +224,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className="flex-1 flex items-center justify-center p-8"
+          className="flex-1 flex items-center justify-center p-4 md:p-8"
         >
           <div className={`relative w-full max-w-4xl transition-all duration-300 ${isDragging ? 'scale-[0.98]' : ''}`}>
             {/* Animated gradient border */}
@@ -233,14 +233,14 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
               : 'bg-gradient-to-r from-zinc-800 via-zinc-700 to-zinc-800 opacity-50'
               }`}></div>
 
-            <div className={`relative bg-zinc-950 rounded-3xl p-16 transition-all duration-300 ${isDragging ? 'bg-red-500/5' : ''
+            <div className={`relative bg-zinc-950 rounded-3xl p-8 md:p-16 transition-all duration-300 ${isDragging ? 'bg-red-500/5' : ''
               }`}>
-              <div className="text-center space-y-8">
+              <div className="text-center space-y-6 md:space-y-8">
                 {/* Icon */}
                 <div className="flex justify-center">
-                  <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center border border-white/10 transition-all duration-300 ${isDragging ? 'scale-110 border-red-500/50' : ''
+                  <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center border border-white/10 transition-all duration-300 ${isDragging ? 'scale-110 border-red-500/50' : ''
                     }`}>
-                    <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-8 h-8 md:w-10 md:h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
@@ -248,31 +248,31 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
                 {/* Heading */}
                 <div>
-                  <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
+                  <h1 className="text-3xl md:text-5xl font-bold text-white mb-3 md:mb-4 tracking-tight">
                     Upload Document
                   </h1>
-                  <p className="text-lg text-zinc-400 max-w-md mx-auto leading-relaxed">
+                  <p className="text-sm md:text-lg text-zinc-400 max-w-md mx-auto leading-relaxed px-4">
                     Drag and drop your file or click to browse. All processing happens locally. Your data never leaves your device.
                   </p>
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-                  <label className="group cursor-pointer">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4 pt-2 md:pt-4">
+                  <label className="group cursor-pointer w-full sm:w-auto">
                     <input
                       type="file"
                       accept=".txt,.pdf,.docx"
                       onChange={handleFileInput}
                       className="hidden"
                     />
-                    <div className="px-8 py-4 bg-white text-black font-bold rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-200">
+                    <div className="px-6 md:px-8 py-3 md:py-4 bg-white text-black font-bold rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-200 text-center">
                       Browse Files
                     </div>
                   </label>
 
                   <button
                     onClick={loadSampleResume}
-                    className="px-8 py-4 bg-zinc-900 text-white font-semibold rounded-2xl border border-white/10 hover:border-white/20 hover:bg-zinc-800 transition-all duration-200"
+                    className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-4 bg-zinc-900 text-white font-semibold rounded-2xl border border-white/10 hover:border-white/20 hover:bg-zinc-800 transition-all duration-200"
                   >
                     Try Sample Resume
                   </button>

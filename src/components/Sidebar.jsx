@@ -5,8 +5,9 @@ import { exportAsTXT, exportAsDOCX, exportAsPDF } from '../utils/exportUtils';
 import { verifyProStatus } from '../utils/proLicenseDB';
 import { showError } from '../utils/toast';
 import AdSenseSlot from './AdSenseSlot';
+import { X } from 'lucide-react';
 
-function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploadedFile, fileType }) {
+function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploadedFile, fileType, onClose }) {
   const [isPro, setIsPro] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -84,17 +85,27 @@ function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploaded
   };
 
   return (
-    <div className="w-80 lg:w-96 bg-zinc-900/50 border-l border-white/10 flex flex-col h-full font-sans backdrop-blur-sm">
+    <div className="w-full lg:w-96 bg-zinc-900 lg:bg-zinc-900/50 border-l border-white/10 flex flex-col h-full font-sans backdrop-blur-sm">
       {/* Header */}
-      <div className="p-6 border-b border-white/10 bg-zinc-900/50 backdrop-blur-sm">
+      <div className="p-4 lg:p-6 border-b border-white/10 bg-zinc-900/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white uppercase tracking-widest font-mono">
-            Analysis
-          </h2>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            <span className="text-xs font-medium text-zinc-400 font-mono">Active</span>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-bold text-white uppercase tracking-widest font-mono">
+              Analysis
+            </h2>
+            <div className="hidden lg:flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="text-xs font-medium text-zinc-400 font-mono">Active</span>
+            </div>
           </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="lg:hidden p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-zinc-400" />
+            </button>
+          )}
         </div>
       </div>
 
