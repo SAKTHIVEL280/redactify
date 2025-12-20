@@ -138,10 +138,10 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto">
-      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row border border-zinc-800 my-auto">
+      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto flex flex-col md:flex-row border border-zinc-800 my-auto">
         
         {/* Left: Value Prop */}
-        <div className="md:w-1/2 bg-zinc-900/50 p-10 border-r border-zinc-800 flex flex-col justify-between">
+        <div className="md:w-1/2 bg-zinc-900/50 p-6 md:p-10 border-r border-zinc-800 flex flex-col justify-between overflow-y-auto">
           <div>
             <div className="inline-block px-3 py-1 rounded-full bg-red-500 text-white text-xs font-bold uppercase tracking-wider mb-8">
               Pro Access
@@ -173,7 +173,7 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
         </div>
 
         {/* Right: Checkout */}
-        <div className="md:w-1/2 p-10 relative flex flex-col">
+        <div className="md:w-1/2 p-6 md:p-10 relative flex flex-col overflow-y-auto">
           <button
             onClick={onClose}
             className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-white rounded-full transition-colors"
