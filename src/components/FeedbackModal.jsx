@@ -38,32 +38,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
     }
 
     try {
-      // For local/demo version, just show email address
-      // In production, this would send via API
-      if (import.meta.env.DEV || !import.meta.env.VITE_FEEDBACK_API) {
-        // Local development - show email message
-        setStatus({ 
-          type: 'success', 
-          message: `Thank you! Please email your ${feedbackTypes.find(t => t.value === formData.type)?.label.toLowerCase()} to support@redactify.com` 
-        });
-        
-        setTimeout(() => {
-          setFormData({
-            type: 'feedback',
-            email: '',
-            subject: '',
-            message: '',
-            attachmentType: ''
-          });
-          setStatus({ type: '', message: '' });
-          onClose();
-        }, 4000);
-        
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // Send feedback via Resend API (production only)
+      // Send feedback via API
       const response = await fetch('/api/send-feedback', {
         method: 'POST',
         headers: {
