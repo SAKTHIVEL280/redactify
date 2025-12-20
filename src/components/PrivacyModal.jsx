@@ -5,8 +5,8 @@ export default function PrivacyModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full border border-zinc-800 overflow-hidden">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto">
+      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] border border-zinc-800 overflow-hidden flex flex-col my-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-8 border-b border-zinc-800">
           <div>
@@ -22,7 +22,7 @@ export default function PrivacyModal({ isOpen, onClose }) {
         </div>
 
         {/* Content */}
-        <div className="p-8">
+        <div className="p-8 overflow-y-auto">
           <p className="text-zinc-400 leading-relaxed mb-6">
             Your documents are processed entirely in your browser. Zero uploads, zero tracking, zero exceptions.
           </p>

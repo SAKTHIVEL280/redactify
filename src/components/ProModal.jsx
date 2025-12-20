@@ -95,9 +95,9 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
 
   if (showEmailPrompt) {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-        <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full border border-zinc-800 overflow-hidden">
-          <div className="p-8 text-center">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto">
+        <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] border border-zinc-800 overflow-hidden my-auto">
+          <div className="p-8 text-center overflow-y-auto">
             <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <Check className="w-8 h-8 text-green-400" />
             </div>
@@ -137,8 +137,8 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row border border-zinc-800">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto">
+      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row border border-zinc-800 my-auto">
         
         {/* Left: Value Prop */}
         <div className="md:w-1/2 bg-zinc-900/50 p-10 border-r border-zinc-800 flex flex-col justify-between">

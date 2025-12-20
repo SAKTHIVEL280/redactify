@@ -178,8 +178,8 @@ export default function BatchProcessor({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-white/10">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-white/10 my-auto">
         
         {/* Header */}
         <div className="p-6 border-b border-white/10 flex items-center justify-between">
@@ -388,8 +388,8 @@ export default function BatchProcessor({ isOpen, onClose }) {
 
       {/* File Review Modal */}
       {reviewingFile && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-[60] p-4">
-          <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-white/10">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-[60] p-4 overflow-y-auto">
+          <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-white/10 my-auto">
             
             {/* Review Header */}
             <div className="p-6 border-b border-white/10 flex items-center justify-between">

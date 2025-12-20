@@ -53,9 +53,9 @@ const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full border border-zinc-800 overflow-hidden">
-        <div className="p-8">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto">
+      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] border border-zinc-800 overflow-hidden flex flex-col my-auto">
+        <div className="p-8 overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold text-white tracking-tight">Recover License</h2>
             <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors">
