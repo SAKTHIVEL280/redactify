@@ -60,7 +60,7 @@ const PATTERNS = {
   
   // Phone: Multiple international formats
   // Matches: 10-digit (India), US formats, +country code, with/without separators
-  [PII_TYPES.PHONE]: /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b|\b\d{10}\b/g,
+  [PII_TYPES.PHONE]: /(\+?\d{1,4}[-\.\s]?)?\(?\d{2,5}\)?[-\.\s]?\d{2,5}[-\.\s]?\d{3,5}[-\.\s]?\d{0,4}\b|\b\d{10,14}\b|\b\(\d{3}\)[-\.\s]?\d{3}[-\.\s]?\d{4}\b|\b\d{3}[-\.\s]\d{3}[-\.\s]\d{4}\b/g,
   
   // URLs: Comprehensive - http(s), www, domain.com, social media profiles
   [PII_TYPES.URL]: /(https?:\/\/[^\s,)]+)|(www\.[^\s,)]+)|([a-z0-9-]+\.(com|org|net|io|dev|app|in|co\.in)\/[^\s,)]+)|((linkedin|github|twitter|facebook|instagram|medium|behance)\.com\/[^\s,)]+)|(\b[a-z0-9-]+\.(com|org|net|io|dev|app)\b)/gi,
@@ -203,14 +203,29 @@ const COMMON_FIRST_NAMES = [
   'Mary', 'Patricia', 'Jennifer', 'Linda', 'Barbara', 'Elizabeth', 'Susan', 'Jessica', 'Sarah', 'Karen',
   'Daniel', 'Matthew', 'Anthony', 'Donald', 'Mark', 'Paul', 'Steven', 'Andrew', 'Kenneth', 'Joshua',
   'Emily', 'Ashley', 'Kimberly', 'Melissa', 'Donna', 'Michelle', 'Dorothy', 'Carol', 'Amanda', 'Betty',
-  'Christopher', 'Kevin', 'Brian', 'George', 'Edward', 'Ronald', 'Timothy', 'Jason', 'Jeffrey', 'Ryan'
+  'Christopher', 'Kevin', 'Brian', 'George', 'Edward', 'Ronald', 'Timothy', 'Jason', 'Jeffrey', 'Ryan',
+  'Nicholas', 'Eric', 'Stephen', 'Jacob', 'Benjamin', 'Alexander', 'Jonathan', 'Nathan', 'Samuel', 'Tyler',
+  'Brandon', 'Justin', 'Aaron', 'Adam', 'Kyle', 'Sean', 'Logan', 'Austin', 'Dylan', 'Evan',
+  'Nicole', 'Samantha', 'Rachel', 'Laura', 'Lauren', 'Brittany', 'Megan', 'Stephanie', 'Katherine', 'Christina',
+  'Emma', 'Olivia', 'Sophia', 'Isabella', 'Mia', 'Abigail', 'Madison', 'Ava', 'Chloe', 'Grace',
+  // Indian common names
+  'Raj', 'Rahul', 'Amit', 'Priya', 'Neha', 'Vikram', 'Arjun', 'Anjali', 'Rohan', 'Kavya',
+  'Aditya', 'Sanjay', 'Deepak', 'Pooja', 'Ravi', 'Krishna', 'Lakshmi', 'Suresh', 'Ramesh', 'Ganesh',
+  'Sakthivel', 'Karthik', 'Praveen', 'Divya', 'Shreya', 'Vivek', 'Abhishek', 'Manish', 'Sandeep', 'Harish'
 ];
 
 const COMMON_LAST_NAMES = [
   'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
   'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin',
   'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson',
-  'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores'
+  'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores',
+  'Green', 'Adams', 'Baker', 'Nelson', 'Carter', 'Mitchell', 'Roberts', 'Turner', 'Phillips', 'Campbell',
+  'Parker', 'Evans', 'Edwards', 'Collins', 'Stewart', 'Morris', 'Rogers', 'Reed', 'Cook', 'Morgan',
+  'Bell', 'Murphy', 'Bailey', 'Rivera', 'Cooper', 'Richardson', 'Cox', 'Howard', 'Ward', 'Peterson',
+  // Indian common surnames
+  'Kumar', 'Singh', 'Sharma', 'Patel', 'Reddy', 'Gupta', 'Verma', 'Jain', 'Agarwal', 'Mehta',
+  'Iyer', 'Nair', 'Rao', 'Menon', 'Pillai', 'Desai', 'Shah', 'Mukherjee', 'Chatterjee', 'Banerjee',
+  'Das', 'Ghosh', 'Joshi', 'Kulkarni', 'Shetty', 'Nambiar', 'Bhat', 'Hegde', 'Krishnan', 'Raman'
 ];
 
 /**
@@ -450,16 +465,27 @@ function detectNames(text) {
   
   // Pattern 1: All-caps name at the very beginning (common in resumes)
   // Matches "FIRSTNAME LASTNAME" or "FIRSTNAME L" or "FIRSTNAME MIDDLE LASTNAME" at document start
-  const allCapsHeaderPattern = /^([A-Z]{2,}(?:\s+[A-Z]{1,})+)(?:\n|\s{2,})/;
+  const allCapsHeaderPattern = /^\s*([A-Z]{2,}(?:\s+[A-Z]{1,})+)(?:\n|\s{2,}|\r)/;
   const headerMatch = allCapsHeaderPattern.exec(text);
   if (headerMatch) {
-    detections.push({
-      type: PII_TYPES.NAME,
-      match: headerMatch[1].trim(),
-      start: 0,
-      end: headerMatch[1].trim().length,
-      confidence: 0.98
+    const nameMatch = headerMatch[1].trim();
+    const startPos = headerMatch[0].indexOf(nameMatch);
+    
+    // Validate it's not a technical term
+    const isBlacklisted = PARTIAL_WORD_BLACKLIST.some(term => {
+      const words = nameMatch.split(/\s+/);
+      return words.some(word => word === term || term.includes(word) || word.includes(term));
     });
+    
+    if (!isBlacklisted) {
+      detections.push({
+        type: PII_TYPES.NAME,
+        match: nameMatch,
+        start: startPos,
+        end: startPos + nameMatch.length,
+        confidence: 0.98
+      });
+    }
   }
   
   // Pattern 1.5: Name with single letter initial (e.g., "SAKTHIVEL E", "John D", "Mary K")
@@ -550,11 +576,11 @@ function detectNames(text) {
   
   // Pattern 3: Capitalized words at start of document (likely name in header)
   // Match pattern: "FirstName LastName" at the beginning or after newline
-  const headerPattern = /(?:^|\n)([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})(?:\n|$)/g;
+  const headerPattern = /(?:^|\n)([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)(?:\n|$|\s{2,})/g;
   let match;
   
   while ((match = headerPattern.exec(text)) !== null) {
-    const nameMatch = match[1];
+    const nameMatch = match[1].trim();
     const actualStart = match.index + (match[0].startsWith('\n') ? 1 : 0);
     
     // Check if it's in the blacklist (case-insensitive)
@@ -566,13 +592,26 @@ function detectNames(text) {
       continue; // Skip blacklisted terms
     }
     
+    // Check if any word in the name is a technical term
+    const words = nameMatch.split(/\s+/);
+    const hasTechnicalWord = words.some(word => 
+      PARTIAL_WORD_BLACKLIST.some(term => 
+        word.toUpperCase() === term || word.toUpperCase().includes(term) || term.includes(word.toUpperCase())
+      )
+    );
+    
+    if (hasTechnicalWord) {
+      continue;
+    }
+    
     // Avoid duplicates
     const isDuplicate = detections.some(d => 
       (actualStart >= d.start && actualStart < d.end) ||
-      d.start === actualStart && d.match === nameMatch
+      (d.start >= actualStart && d.start < actualStart + nameMatch.length) ||
+      Math.abs(d.start - actualStart) < 5
     );
     
-    if (!isDuplicate) {
+    if (!isDuplicate && match.index < 500) { // Only in first 500 chars
       detections.push({
         type: PII_TYPES.NAME,
         match: nameMatch,
