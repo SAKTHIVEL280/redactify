@@ -128,6 +128,22 @@ function App() {
     setOriginalText('');    setUploadedFile(null);
     setFileType(null);  };
 
+  const scrollToSection = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const goToSection = (id) => {
+    if (currentView !== 'landing') {
+      setCurrentView('landing');
+      setTimeout(() => scrollToSection(id), 200);
+    } else {
+      scrollToSection(id);
+    }
+  };
+
   // Handle PII detection
   const handlePIIDetected = (piiItems, text, file = null, type = null) => {
     setDetectedPII(piiItems);
@@ -181,6 +197,16 @@ function App() {
 
           {/* Desktop Actions */}
           <div className="flex items-center gap-6 md:gap-8">
+            {currentView === 'landing' && (
+              <div className="hidden md:flex items-center gap-5 text-xs font-mono uppercase tracking-wider text-zinc-400">
+                <button onClick={() => scrollToSection('features')} className="hover:text-white transition-colors">Features</button>
+                <button onClick={() => scrollToSection('use-cases')} className="hover:text-white transition-colors">Use Cases</button>
+                <button onClick={() => scrollToSection('blog')} className="hover:text-white transition-colors">Blog</button>
+                <button onClick={() => scrollToSection('faq')} className="hover:text-white transition-colors">FAQ</button>
+                <button onClick={() => scrollToSection('about')} className="hover:text-white transition-colors">About</button>
+              </div>
+            )}
+
             {currentView === 'redactor' && (
               <button
                 onClick={handleGoToLanding}
@@ -383,6 +409,18 @@ function App() {
               break;
             case 'upgrade':
               setShowProModal(true);
+              break;
+            case 'blog':
+              goToSection('blog');
+              break;
+            case 'faq':
+              goToSection('faq');
+              break;
+            case 'about':
+              goToSection('about');
+              break;
+            case 'usecases':
+              goToSection('usecases-deep');
               break;
             default:
               break;

@@ -444,8 +444,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
             </div>
           </div>
 
-          {/* AdSense - Bottom Ad */}
-          {!isPro && detectedPII.length > 0 && (
+          {/* AdSense - Bottom Ad (Only after substantial interaction) */}
+          {!isPro && detectedPII.length > 3 && text.length > 500 && (
             <div className="flex-shrink-0 border-t border-white/5 bg-zinc-950/50 backdrop-blur-xl">
               <div className="max-w-full mx-auto px-6 py-3">
                 <AdSenseSlot

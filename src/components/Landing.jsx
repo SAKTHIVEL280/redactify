@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
 import AdSenseSlot from './AdSenseSlot';
 import PrivacyModal from './PrivacyModal';
+import Blog from './Blog';
+import FAQ from './FAQ';
+import About from './About';
+import UseCaseDeepDives from './UseCaseDeepDives';
 
 export default function Landing({ onGetStarted, isPro }) {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -390,20 +394,17 @@ export default function Landing({ onGetStarted, isPro }) {
         </div>
       </section >
 
-      {/* AdSense Slot (Mid-Page) */}
-      {
-        !isPro && (
-          <div className="relative z-10 px-6 py-12 border-t border-white/5">
-            <div className="max-w-3xl mx-auto">
-              <AdSenseSlot
-                slot="LANDING_MID_SLOT_ID"
-                format="horizontal"
-                style={{ minHeight: '90px' }}
-              />
-            </div>
-          </div>
-        )
-      }
+      {/* Deep Case Studies */}
+      <UseCaseDeepDives />
+
+      {/* Long-form Blog Content */}
+      <Blog />
+
+      {/* FAQ Section */}
+      <FAQ />
+
+      {/* About & Mission */}
+      <About />
 
       {/* Final CTA - Full Width Immersive */}
       <section className="relative z-10 px-6 py-40 border-t border-white/5 overflow-hidden">
@@ -497,6 +498,7 @@ export default function Landing({ onGetStarted, isPro }) {
                 <li><a href="#features" className="text-sm text-zinc-500 hover:text-white transition-colors">Features</a></li>
                 <li><a href="#how-it-works" className="text-sm text-zinc-500 hover:text-white transition-colors">How It Works</a></li>
                 <li><a href="#use-cases" className="text-sm text-zinc-500 hover:text-white transition-colors">Use Cases</a></li>
+                <li><a href="#usecases-deep" className="text-sm text-zinc-500 hover:text-white transition-colors">Case Studies</a></li>
                 <li><button onClick={onGetStarted} className="text-sm text-zinc-500 hover:text-white transition-colors text-left">Get Started</button></li>
               </ul>
             </div>
@@ -505,9 +507,9 @@ export default function Landing({ onGetStarted, isPro }) {
             <div>
               <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Resources</h3>
               <ul className="space-y-2">
-                <li><a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-white transition-colors">Documentation</a></li>
-                <li><a href="#" onClick={(e) => { e.preventDefault(); alert('Privacy Policy coming soon'); }} className="text-sm text-zinc-500 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#" onClick={(e) => { e.preventDefault(); alert('Terms of Service coming soon'); }} className="text-sm text-zinc-500 hover:text-white transition-colors">Terms of Service</a></li>
+                <li><a href="#blog" className="text-sm text-zinc-500 hover:text-white transition-colors">Blog</a></li>
+                <li><a href="#faq" className="text-sm text-zinc-500 hover:text-white transition-colors">FAQ</a></li>
+                <li><a href="#about" className="text-sm text-zinc-500 hover:text-white transition-colors">About</a></li>
                 <li><a href="mailto:support@redactify.com" className="text-sm text-zinc-500 hover:text-white transition-colors">Support</a></li>
               </ul>
             </div>

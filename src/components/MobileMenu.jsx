@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Home, Zap, Shield, MessageSquare, Key, Menu as MenuIcon } from 'lucide-react';
+import { X, Home, Zap, Shield, MessageSquare, Key, Menu as MenuIcon, BookOpen, HelpCircle, Info, Layers } from 'lucide-react';
 
 export default function MobileMenu({ isOpen, onClose, currentView, isPro, onNavigate }) {
   if (!isOpen) return null;
@@ -12,6 +12,10 @@ export default function MobileMenu({ isOpen, onClose, currentView, isPro, onNavi
       { icon: Zap, label: 'Batch Processing', action: 'batch' },
       { icon: MenuIcon, label: 'Custom Rules', action: 'rules' }
     ] : []),
+    { icon: BookOpen, label: 'Blog & Guides', action: 'blog' },
+    { icon: Layers, label: 'Case Studies', action: 'usecases' },
+    { icon: HelpCircle, label: 'FAQ', action: 'faq' },
+    { icon: Info, label: 'About', action: 'about' },
     { icon: Shield, label: 'Privacy', action: 'privacy' },
     { icon: MessageSquare, label: 'Feedback', action: 'feedback' },
     ...(!isPro ? [
