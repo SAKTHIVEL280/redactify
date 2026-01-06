@@ -4,7 +4,23 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Validate environment variables
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Supabase configuration missing');
+}
+
+export const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+
+// Input validation helpers
+function isValidEmail(email) {
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  return emailRegex.test(email);
+}
+
+function sanitizeEmail(email) {
+  if (typeof email !== 'string') return '';
+  return email.trim().toLowerCase().slice(0, 254); // Max email length
+}
 
 /**
  * Store Pro license in Supabase for recovery
@@ -17,6 +33,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  */
 export const storeLicenseInSupabase = async (licenseData) => {
   try {
+    if (!supabase) {
+      return { success: false, error: 'Supabase not configured' };
+    }
+
+    // Validate and sanitize email
+    let sanitizedEmail = null;
+    if (licenseData.email) {
+      sanitizedEmail = sanitizeEmail(licenseData.email);
+      if (!isValidEmail(sanitizedEmail)) {
+        return { success: false, error: 'Invalid email format' };
+      }
+    }
+
     const { data, error } = await supabase
       .from('pro_licenses')
       .insert([
@@ -24,7 +53,7 @@ export const storeLicenseInSupabase = async (licenseData) => {
           license_key: licenseData.licenseKey,
           payment_id: licenseData.paymentId,
           order_id: licenseData.orderId,
-          email: licenseData.email || null,
+          email: sanitizedEmail,
           purchased_at: new Date().toISOString(),
           is_active: true
         }
@@ -84,10 +113,20 @@ export const recoverLicenseByPaymentId = async (paymentId) => {
  */
 export const recoverLicenseByEmail = async (email) => {
   try {
+    if (!supabase) {
+      return { success: false, error: 'Supabase not configured' };
+    }
+
+    // Validate and sanitize email
+    const sanitizedEmail = sanitizeEmail(email);
+    if (!isValidEmail(sanitizedEmail)) {
+      return { success: false, error: 'Invalid email format' };
+    }
+
     const { data, error } = await supabase
       .from('pro_licenses')
       .select('license_key, payment_id, purchased_at, is_active')
-      .eq('email', email.toLowerCase())
+      .eq('email', sanitizedEmail)
       .eq('is_active', true)
       .order('purchased_at', { ascending: false });
 

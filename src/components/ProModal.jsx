@@ -23,8 +23,13 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
         currency: 'INR'
       });
 
+      const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+      if (!razorpayKey) {
+        throw new Error('Payment configuration error. Please contact support.');
+      }
+
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_xxxxxxxxxxxxxxxx',
+        key: razorpayKey,
         amount: orderData.amount,
         currency: orderData.currency,
         name: 'Resume Redactor Pro',

@@ -110,7 +110,7 @@ function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploaded
       </div>
 
       {/* PII List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {piiItems.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-8">
             <div className="text-sm font-medium text-white mb-2">No Sensitive Data Found</div>
@@ -122,34 +122,34 @@ function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploaded
           piiItems.map((item) => (
             <div
               key={item.id}
-              className={`group relative p-4 rounded-xl border transition-all duration-200 ${item.redact
+              className={`group relative p-3 rounded-lg border transition-all duration-200 ${item.redact
                 ? 'bg-zinc-900/80 border-white/10 shadow-sm'
                 : 'bg-zinc-950/50 border-zinc-800/50 opacity-60 hover:opacity-100'
                 }`}
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-1.5">
                     <span className={`w-1.5 h-1.5 rounded-full ${item.redact ? getTypeColor(item.type) : 'bg-zinc-600'}`} />
                     <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
                       {item.type}
                     </span>
                     {/* Status indicator */}
-                    <span className={`ml-auto text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${item.redact 
+                    <span className={`ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${item.redact 
                       ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
                       : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
                     }`}>
                       {item.redact ? 'Redacting' : 'Ignored'}
                     </span>
                   </div>
-                  <div className={`text-sm font-mono break-all ${item.redact ? 'text-white' : 'text-zinc-500 line-through'}`}>
+                  <div className={`text-xs font-mono break-all leading-tight ${item.redact ? 'text-white' : 'text-zinc-500 line-through'}`}>
                     {item.value}
                   </div>
                 </div>
 
                 <button
                   onClick={() => handleToggle(item.id)}
-                  className={`flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors font-mono ${item.redact
+                  className={`flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded transition-colors font-mono ${item.redact
                     ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
                     : 'bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-800/50'
                     }`}
@@ -163,54 +163,65 @@ function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploaded
       </div>
 
       {/* Export Section */}
-      <div className="p-4 bg-zinc-900/50 border-t border-white/10 backdrop-blur-sm flex-shrink-0 mt-auto">
-        <div className="space-y-3">
+      <div className="p-3 bg-zinc-900/50 border-t border-white/10 backdrop-blur-sm flex-shrink-0">
+        <div className="space-y-2">
           <button
             onClick={handleExportTXT}
             disabled={stats.accepted === 0}
-            className="w-full px-4 py-3 bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium flex items-center justify-between group"
+            className="w-full px-3 py-2 bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium flex items-center justify-between group"
           >
             <span>Export as Text</span>
-            <span className="text-[10px] font-bold text-zinc-500 group-hover:text-zinc-400 transition-colors font-mono">.TXT</span>
+            <span className="text-[9px] font-bold text-zinc-500 group-hover:text-zinc-400 transition-colors font-mono">.TXT</span>
           </button>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <button
               onClick={handleExportDOCX}
               disabled={exporting || stats.accepted === 0}
-              className={`px-4 py-3 rounded-xl text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 border ${isPro
+              className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center justify-center gap-0.5 border ${isPro
                 ? 'bg-white text-black border-transparent hover:bg-zinc-200 shadow-lg'
                 : 'bg-zinc-900/80 text-zinc-600 border-white/10 hover:border-white/20'
                 }`}
             >
               <span>Word</span>
-              {!isPro && <span className="text-[10px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
+              {!isPro && <span className="text-[8px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
             </button>
 
             <button
               onClick={handleExportPDF}
               disabled={exporting || stats.accepted === 0}
-              className={`px-4 py-3 rounded-xl text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 border ${isPro
+              className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center justify-center gap-0.5 border ${isPro
                 ? 'bg-white text-black border-transparent hover:bg-zinc-200 shadow-lg'
                 : 'bg-zinc-900/80 text-zinc-600 border-white/10 hover:border-white/20'
                 }`}
             >
               <span>PDF</span>
-              {!isPro && <span className="text-[10px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
+              {!isPro && <span className="text-[8px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
             </button>
           </div>
         </div>
-
-        {!isPro && piiItems.length > 0 && (
-          <div className="mt-6">
-            <AdSenseSlot
-              slot="SIDEBAR_SLOT_ID"
-              format="rectangle"
-              style={{ minHeight: '250px', display: 'block' }}
-            />
-          </div>
-        )}
       </div>
+
+      {/* Ads Section - Scrollable if needed */}
+      {!isPro && piiItems.length > 0 && (
+        <div className="p-3 bg-zinc-900/30 border-t border-white/10 overflow-y-auto max-h-[300px] flex-shrink-0">
+          <AdSenseSlot
+            slot="SIDEBAR_SLOT_ID"
+            format="rectangle"
+            style={{ minHeight: '250px', display: 'block' }}
+          />
+          {stats.accepted > 0 && (
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <p className="text-xs text-center text-zinc-600 mb-2 font-mono">Support this free tool</p>
+              <AdSenseSlot
+                slot="SIDEBAR_DOWNLOAD_SLOT_ID"
+                format="rectangle"
+                style={{ minHeight: '200px', display: 'block' }}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

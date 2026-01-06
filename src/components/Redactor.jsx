@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { X, RefreshCw } from 'lucide-react';
+import { X, RefreshCw, Sparkles } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { detectPII, extractTextFromInput, highlightPII } from '../utils/piiDetector';
 import { usePIIDetection } from '../hooks/usePIIDetection';
+import { useTransformersPII } from '../hooks/useTransformersPII';
+import { detectPIIHybrid } from '../utils/hybridDetection';
 import { getEnabledCustomRules } from '../utils/customRulesDB';
 import { getFileTypeFromMime } from '../utils/fileHelpers';
-import { showError } from '../utils/toast';
+import { showError, showSuccess } from '../utils/toast';
 import AdSenseSlot from './AdSenseSlot';
 import DocumentViewer from './DocumentViewer';
 
@@ -17,9 +19,19 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
   const [customRules, setCustomRules] = useState([]);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileType, setFileType] = useState(null);
+  const abortControllerRef = React.useRef(null);
 
   // Use Web Worker hook for heavy processing (optional - falls back to main thread)
   const { detect } = usePIIDetection();
+  
+  // Use Transformers.js ML model for advanced PII detection
+  const { 
+    detectPII: detectWithML, 
+    isModelLoading, 
+    modelProgress, 
+    modelError,
+    isModelCached 
+  } = useTransformersPII();
 
   // Load custom rules on mount and when isPro changes
   useEffect(() => {
@@ -37,23 +49,31 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
       }
     };
     loadCustomRules();
+  }, [isPro]);
 
-    // Listen for custom rules updates
+  // Separate effect for listening to custom rules updates
+  useEffect(() => {
     const handleRulesUpdate = async () => {
-      await loadCustomRules();
-      
-      // Re-analyze current text with updated rules if there's text
-      if (text && text.trim().length > 10) {
-        setIsProcessing(true);
+      if (isPro) {
         try {
           const rules = await getEnabledCustomRules();
-          const detected = await detect(text, rules);
-          onPIIDetected(detected, text, uploadedFile, fileType);
+          setCustomRules(rules);
+          
+          // Re-analyze current text with updated rules if there's text
+          if (text && text.trim().length > 10) {
+            setIsProcessing(true);
+            try {
+              const detected = await detect(text, rules);
+              onPIIDetected(detected, text, uploadedFile, fileType);
+            } catch (err) {
+              showError('Error re-analyzing with updated rules');
+              setError(err.message);
+            } finally {
+              setIsProcessing(false);
+            }
+          }
         } catch (err) {
-          showError('Error re-analyzing with updated rules');
-          setError(err.message);
-        } finally {
-          setIsProcessing(false);
+          showError('Failed to reload custom rules');
         }
       }
     };
@@ -63,7 +83,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
     return () => {
       window.removeEventListener('customRulesUpdated', handleRulesUpdate);
     };
-  }, [isPro]); // Removed text, detect, onPIIDetected, uploadedFile, fileType to prevent infinite loops
+  }, [isPro, text, detect, onPIIDetected, uploadedFile, fileType]);
 
   // Memoize highlighted HTML to avoid unnecessary re-renders
   const highlightedHTML = useMemo(() => {
@@ -84,8 +104,14 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
       // Debounce detection for performance (real-time but not on every keystroke)
       setTimeout(async () => {
         try {
-          // Use Web Worker for large documents automatically, pass custom rules
-          const detected = await detect(newText, customRules);
+          // Always use hybrid detection (AI + regex) - AI runs locally, 100% private
+          let detected;
+          if (!modelError) {
+            detected = await detectPIIHybrid(newText, detectWithML, customRules, true);
+          } else {
+            // Fallback to regex-only if model fails to load
+            detected = await detect(newText, customRules);
+          }
           onPIIDetected(detected, newText);
         } catch (err) {
           setError('Error detecting PII: ' + err.message);
@@ -119,6 +145,13 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
     const file = e.dataTransfer.files[0];
     if (!file) return;
 
+    // Cancel any pending operations
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     try {
       setIsProcessing(true);
       setUploadedFile(file);
@@ -126,24 +159,48 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
       setFileType(detectedType);
       
       const content = await extractTextFromInput(file);
+      
+      // Check if aborted
+      if (signal.aborted) return;
+      
       setText(content);
 
-      const detected = await detect(content, customRules);
+      // Always use hybrid detection (AI + regex)
+      let detected;
+      if (!modelError) {
+        detected = await detectPIIHybrid(content, detectWithML, customRules, true);
+      } else {
+        detected = await detect(content, customRules);
+      }
+      
+      // Check if aborted
+      if (signal.aborted) return;
+      
       onPIIDetected(detected, content, file, detectedType);
     } catch (err) {
+      if (err.name === 'AbortError') return;
       showError(err.message || 'Failed to read file');
       setError(err.message);
       setText('');
       onPIIDetected([], '', null, null);
     } finally {
-      setIsProcessing(false);
+      if (!signal.aborted) {
+        setIsProcessing(false);
+      }
     }
-  }, [onPIIDetected, detect, customRules]);
+  }, [onPIIDetected, detect, customRules, modelError, detectWithML]);
 
   // Handle file input with file extraction
   const handleFileInput = useCallback(async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Cancel any pending operations
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     try {
       setIsProcessing(true);
@@ -154,19 +211,36 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
       setFileType(detectedType);
 
       const content = await extractTextFromInput(file);
+      
+      // Check if aborted
+      if (signal.aborted) return;
+      
       setText(content);
 
-      const detected = await detect(content, customRules);
+      // Always use hybrid detection (AI + regex)
+      let detected;
+      if (!modelError) {
+        detected = await detectPIIHybrid(content, detectWithML, customRules, true);
+      } else {
+        detected = await detect(content, customRules);
+      }
+      
+      // Check if aborted
+      if (signal.aborted) return;
+      
       onPIIDetected(detected, content, file, detectedType);
     } catch (err) {
+      if (err.name === 'AbortError') return;
       showError(err.message || 'Failed to read file');
       setError(err.message);
       setText('');
       onPIIDetected([], '', null, null);
     } finally {
-      setIsProcessing(false);
+      if (!signal.aborted) {
+        setIsProcessing(false);
+      }
     }
-  }, [detect, customRules, onPIIDetected]);
+  }, [detect, customRules, onPIIDetected, modelError, detectWithML]);
 
   // Sample resume text
   const loadSampleResume = useCallback(async () => {
@@ -206,7 +280,13 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
     
     try {
       setIsProcessing(true);
-      const detected = await detect(sample, customRules);
+      // Always use hybrid detection (AI + regex)
+      let detected;
+      if (!modelError) {
+        detected = await detectPIIHybrid(sample, detectWithML, customRules, true);
+      } else {
+        detected = await detect(sample, customRules);
+      }
       onPIIDetected(detected, sample, null, 'txt');
     } catch (err) {
       showError('Error detecting PII in sample resume');
@@ -214,10 +294,43 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
     } finally {
       setIsProcessing(false);
     }
-  }, [detect, customRules, onPIIDetected]);
+  }, [detect, customRules, onPIIDetected, modelError, detectWithML]);
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
+      {/* AI Detection Status Bar */}
+      {(isModelLoading || modelError || isModelCached) && (
+        <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-3">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            <div className="flex items-center gap-3">
+              {isModelLoading && (
+                <>
+                  <Sparkles className="w-5 h-5 text-blue-400 animate-pulse" />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">
+                      Initializing AI Detection Engine... {modelProgress}%
+                    </p>
+                    <p className="text-xs text-zinc-500">One-time download • Runs 100% locally • Cached forever</p>
+                  </div>
+                </>
+              )}
+              {!isModelLoading && modelError && (
+                <>
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <p className="text-sm text-zinc-400">AI model unavailable - using pattern-based detection</p>
+                </>
+              )}
+              {!isModelLoading && !modelError && isModelCached && (
+                <>
+                  <Sparkles className="w-5 h-5 text-green-400" />
+                  <p className="text-sm text-zinc-400">AI-Powered Detection Active (100% Local & Private)</p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       {!text ? (
         // Empty State - Premium Upload Zone
         <div
@@ -452,6 +565,20 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                   slot="RESULTS_FOOTER_SLOT_ID"
                   format="horizontal"
                   style={{ minHeight: '90px' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* AdSense - After Successful Redaction */}
+          {!isPro && detectedPII.length > 0 && detectedPII.filter(p => p.redact).length > 0 && (
+            <div className="flex-shrink-0 bg-zinc-900/30 backdrop-blur-xl">
+              <div className="max-w-full mx-auto px-6 py-4 text-center">
+                <p className="text-xs text-zinc-500 mb-2 font-mono uppercase tracking-wide">Continue Using Free Tools</p>
+                <AdSenseSlot
+                  slot="POST_REDACTION_SLOT_ID"
+                  format="horizontal"
+                  style={{ minHeight: '100px' }}
                 />
               </div>
             </div>

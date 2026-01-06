@@ -185,14 +185,14 @@ export default function Landing({ onGetStarted, isPro }) {
 
             {/* Smart Detection */}
             <div className="md:col-span-5 bg-zinc-900/30 border border-white/10 rounded-3xl p-8 hover:border-white/20 transition-all duration-500 group backdrop-blur-sm">
-              <div className="text-xs font-mono text-zinc-500 uppercase tracking-widest mb-4">Intelligence</div>
-              <h3 className="text-2xl font-bold text-white mb-4 tracking-tight">Smart Detection</h3>
+              <div className="text-xs font-mono text-zinc-500 uppercase tracking-widest mb-4">AI-Powered</div>
+              <h3 className="text-2xl font-bold text-white mb-4 tracking-tight">Smart Detection Engine</h3>
               <p className="text-zinc-400 leading-relaxed mb-6">
-                Automatically identifies sensitive information with high accuracy.
+                Advanced AI model running 100% locally identifies sensitive information with high accuracy.
               </p>
 
               <div className="space-y-2">
-                {['Names', 'Emails', 'Phone Numbers', 'URLs', 'Addresses'].map((item, i) => (
+                {['Names (AI)', 'Emails', 'Phone Numbers', 'URLs', 'Addresses'].map((item, i) => (
                   <div
                     key={i}
                     className="flex items-center gap-3 text-sm opacity-0 animate-[slideIn_0.5s_ease-out_forwards]"
@@ -357,9 +357,9 @@ export default function Landing({ onGetStarted, isPro }) {
                 },
                 {
                   step: '02',
-                  title: 'Review Detected PII',
-                  description: 'See all sensitive info highlighted in real-time. Toggle individual items to keep or redact.',
-                  detail: 'Names, emails, phones, URLs, addresses auto-detected',
+                  title: 'AI Detection & Review',
+                  description: 'Our local AI engine highlights sensitive info in real-time. Toggle individual items to keep or redact.',
+                  detail: 'AI-powered name detection + pattern matching',
                 },
                 {
                   step: '03',
@@ -463,6 +463,22 @@ export default function Landing({ onGetStarted, isPro }) {
           </div>
         </div>
       </section>
+
+      {/* AdSense Slot (Middle - Between FAQ and Footer) */}
+      {
+        !isPro && (
+          <div className="relative z-10 px-6 py-8 border-t border-white/5 bg-zinc-900/20">
+            <div className="max-w-3xl mx-auto">
+              <p className="text-xs text-center text-zinc-600 mb-3 font-mono uppercase tracking-wide">Sponsored</p>
+              <AdSenseSlot
+                slot="LANDING_MID_SLOT_ID"
+                format="horizontal"
+                style={{ minHeight: '100px' }}
+              />
+            </div>
+          </div>
+        )
+      }
 
       {/* AdSense Slot (Bottom) */}
       {

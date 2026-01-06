@@ -2,10 +2,48 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Simple in-memory rate limiting (use Redis in production)
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 3;
+
+function checkRateLimit(identifier) {
+  const now = Date.now();
+  const userRequests = rateLimitMap.get(identifier) || [];
+  
+  // Remove expired entries
+  const validRequests = userRequests.filter(time => now - time < RATE_LIMIT_WINDOW);
+  
+  if (validRequests.length >= MAX_REQUESTS_PER_WINDOW) {
+    return false;
+  }
+  
+  validRequests.push(now);
+  rateLimitMap.set(identifier, validRequests);
+  return true;
+}
+
+// Input sanitization
+function sanitizeInput(input) {
+  if (typeof input !== 'string') return '';
+  return input.trim().slice(0, 5000); // Limit to 5000 chars
+}
+
+function isValidEmail(email) {
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  return emailRegex.test(email);
+}
+
 export default async function handler(req, res) {
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Rate limiting by IP
+  const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+  if (!checkRateLimit(clientIp)) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
   }
 
   try {
@@ -14,6 +52,22 @@ export default async function handler(req, res) {
     // Validation
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Sanitize inputs
+    const sanitizedMessage = sanitizeInput(message);
+    const sanitizedSubject = sanitizeInput(subject || 'No subject');
+    const sanitizedEmail = email ? sanitizeInput(email) : null;
+    
+    // Validate email if provided
+    if (sanitizedEmail && !isValidEmail(sanitizedEmail)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Validate type
+    const validTypes = ['feedback', 'bug', 'missing_pii', 'improvement'];
+    if (type && !validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid feedback type' });
     }
 
     // Build email content
@@ -27,12 +81,12 @@ export default async function handler(req, res) {
     const emailContent = `
 New ${feedbackTypeLabels[type] || 'Feedback'} from Redactify
 
-${email ? `User Email: ${email}` : 'User Email: Not provided'}
-${subject ? `Subject: ${subject}` : ''}
+${sanitizedEmail ? `User Email: ${sanitizedEmail}` : 'User Email: Not provided'}
+${sanitizedSubject ? `Subject: ${sanitizedSubject}` : ''}
 ${attachmentType ? `PII Type Missed: ${attachmentType}` : ''}
 
 Message:
-${message}
+${sanitizedMessage}
 
 ---
 Sent from Redactify Feedback System
@@ -43,8 +97,8 @@ Timestamp: ${new Date().toISOString()}
     const data = await resend.emails.send({
       from: 'Redactify <onboarding@resend.dev>', // Using Resend's onboarding domain (works immediately)
       to: ['sakthivel.hsr06@gmail.com'], // Your email for receiving feedback
-      replyTo: email || undefined,
-      subject: `[Redactify] ${feedbackTypeLabels[type]}: ${subject || 'No subject'}`,
+      replyTo: sanitizedEmail || undefined,
+      subject: `[Redactify] ${feedbackTypeLabels[type]}: ${sanitizedSubject || 'No subject'}`,
       text: emailContent,
     });
 

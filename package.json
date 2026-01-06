@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.3",
+    "@xenova/transformers": "^2.6.0",
     "axios": "^1.6.2",
     "docx": "^8.5.0",
     "dompurify": "^3.3.1",
@@ -17,6 +18,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.294.0",
     "mammoth": "^1.11.0",
+    "onnxruntime-web": "^1.16.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.449",
     "prop-types": "^15.8.1",

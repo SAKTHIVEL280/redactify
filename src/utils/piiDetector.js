@@ -4,6 +4,8 @@
  * Detects: emails, phones, URLs, names, addresses, locations
  */
 
+import DOMPurify from 'dompurify';
+
 export const PII_TYPES = {
   EMAIL: 'email',
   PHONE: 'phone',
@@ -58,9 +60,9 @@ const PATTERNS = {
   // Email: comprehensive pattern matching all common formats
   [PII_TYPES.EMAIL]: /\b[a-zA-Z0-9][a-zA-Z0-9._%+-]{0,63}@[a-zA-Z0-9][a-zA-Z0-9.-]{0,253}\.[a-zA-Z]{2,}\b/gi,
   
-  // Phone: Multiple international formats
+  // Phone: Multiple international formats (simplified to prevent ReDoS)
   // Matches: 10-digit (India), US formats, +country code, with/without separators
-  [PII_TYPES.PHONE]: /(\+?\d{1,4}[-\.\s]?)?\(?\d{2,5}\)?[-\.\s]?\d{2,5}[-\.\s]?\d{3,5}[-\.\s]?\d{0,4}\b|\b\d{10,14}\b|\b\(\d{3}\)[-\.\s]?\d{3}[-\.\s]?\d{4}\b|\b\d{3}[-\.\s]\d{3}[-\.\s]\d{4}\b/g,
+  [PII_TYPES.PHONE]: /\+?\d{1,4}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b|\b\d{10,14}\b|\b\(\d{3}\)[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
   
   // URLs: Comprehensive - http(s), www, domain.com, social media profiles
   [PII_TYPES.URL]: /(https?:\/\/[^\s,)]+)|(www\.[^\s,)]+)|([a-z0-9-]+\.(com|org|net|io|dev|app|in|co\.in)\/[^\s,)]+)|((linkedin|github|twitter|facebook|instagram|medium|behance)\.com\/[^\s,)]+)|(\b[a-z0-9-]+\.(com|org|net|io|dev|app)\b)/gi,
@@ -241,6 +243,12 @@ export async function extractTextFromInput(input) {
   
   // If it's a File object
   if (input instanceof File) {
+    // Validate file size (10MB limit)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (input.size > MAX_FILE_SIZE) {
+      throw new Error(`File size exceeds 10MB limit. Current size: ${(input.size / 1024 / 1024).toFixed(2)}MB`);
+    }
+
     const fileType = input.type;
     
     // Handle text files
@@ -287,7 +295,8 @@ async function extractTextFromPDF(file) {
     // Dynamically import pdfjs-dist
     const pdfjsLib = await import('pdfjs-dist');
     
-    // Set worker source - use unpkg CDN
+    // Set worker source - use CDN compatible with CSP
+    // Note: In production, copy worker to public folder for better security
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
     
     // Load the PDF document
@@ -300,6 +309,21 @@ async function extractTextFromPDF(file) {
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
+      
+      // Sort by Y position first (top to bottom), then X position (left to right)
+      // This fixes multicolumn layouts
+      textContent.items.sort((a, b) => {
+        const aY = a.transform[5];
+        const bY = b.transform[5];
+        const aX = a.transform[4];
+        const bX = b.transform[4];
+        
+        // If on same line (within 5 units), sort by X
+        if (Math.abs(bY - aY) <= 5) {
+          return aX - bX; // Left to right
+        }
+        return bY - aY; // Higher Y = top of page
+      });
       
       let lastY = null;
       let pageText = '';
@@ -362,6 +386,40 @@ async function extractTextFromDOCX(file) {
 }
 
 /**
+ * Helper function to execute regex with timeout protection
+ * @param {RegExp} regex - Regular expression to execute
+ * @param {string} text - Text to search in
+ * @param {number} timeoutMs - Timeout in milliseconds (default 1000ms)
+ * @returns {Array} Array of regex matches
+ */
+function safeRegexExec(regex, text, timeoutMs = 1000) {
+  const matches = [];
+  const startTime = Date.now();
+  let match;
+  
+  try {
+    regex.lastIndex = 0;
+    while ((match = regex.exec(text)) !== null) {
+      // Check for timeout
+      if (Date.now() - startTime > timeoutMs) {
+        console.warn(`Regex timeout for pattern: ${regex.source}`);
+        break;
+      }
+      matches.push(match);
+      
+      // Prevent infinite loop on zero-width matches
+      if (match.index === regex.lastIndex) {
+        regex.lastIndex++;
+      }
+    }
+  } catch (error) {
+    console.error('Regex execution error:', error);
+  }
+  
+  return matches;
+}
+
+/**
  * 2. Detect PII in text using regex patterns
  * @param {string} text - Text to analyze
  * @param {Array} customRules - Optional custom regex rules to apply
@@ -379,12 +437,9 @@ export function detectPII(text, customRules = []) {
   // Detect pattern-based PII (email, phone, URL, address)
   Object.entries(PATTERNS).forEach(([type, pattern]) => {
     const regex = new RegExp(pattern);
-    let match;
+    const matches = safeRegexExec(regex, text);
     
-    // Reset regex lastIndex for global patterns
-    regex.lastIndex = 0;
-    
-    while ((match = regex.exec(text)) !== null) {
+    matches.forEach((match) => {
       detections.push({
         id: `pii-${idCounter++}`,
         type,
@@ -395,7 +450,7 @@ export function detectPII(text, customRules = []) {
         confidence: 1.0,
         redact: true // Use 'redact' for consistency with UI
       });
-    }
+    });
   });
   
   // Detect names (capitalized header words)
@@ -469,15 +524,17 @@ function detectNames(text) {
   const headerMatch = allCapsHeaderPattern.exec(text);
   if (headerMatch) {
     const nameMatch = headerMatch[1].trim();
-    const startPos = headerMatch[0].indexOf(nameMatch);
+    const startPos = text.indexOf(nameMatch);
     
-    // Validate it's not a technical term
-    const isBlacklisted = PARTIAL_WORD_BLACKLIST.some(term => {
-      const words = nameMatch.split(/\s+/);
-      return words.some(word => word === term || term.includes(word) || word.includes(term));
-    });
+    // Validate it's not a technical term - only check if ALL words are in blacklist
+    const words = nameMatch.split(/\s+/);
+    const allWordsBlacklisted = words.every(word => 
+      PARTIAL_WORD_BLACKLIST.some(term => 
+        word.toUpperCase() === term || term.includes(word.toUpperCase())
+      )
+    );
     
-    if (!isBlacklisted) {
+    if (!allWordsBlacklisted) {
       detections.push({
         type: PII_TYPES.NAME,
         match: nameMatch,
@@ -723,7 +780,13 @@ export function highlightPII(text, matches) {
     parts.push(escapeHtml(text.substring(lastIndex)));
   }
   
-  return parts.join('');
+  // SECURITY FIX: Sanitize final HTML to prevent XSS attacks
+  const html = parts.join('');
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['mark'],
+    ALLOWED_ATTR: ['class', 'title', 'data-pii-id'],
+    KEEP_CONTENT: true
+  });
 }
 
 /**

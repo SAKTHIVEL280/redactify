@@ -53,6 +53,13 @@ export function usePIIDetection() {
     }
 
     return () => {
+      // Clear all pending callbacks
+      pendingCallbacksRef.current.forEach((callback) => {
+        callback.reject(new Error('Worker terminated'));
+      });
+      pendingCallbacksRef.current.clear();
+      
+      // Terminate worker
       if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;

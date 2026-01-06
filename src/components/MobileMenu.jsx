@@ -7,19 +7,13 @@ export default function MobileMenu({ isOpen, onClose, currentView, isPro, onNavi
   const menuItems = [
     ...(currentView === 'redactor' ? [
       { icon: Home, label: 'Home', action: 'home' }
-    ] : []),
-    ...(isPro ? [
-      { icon: Zap, label: 'Batch Processing', action: 'batch' },
-      { icon: MenuIcon, label: 'Custom Rules', action: 'rules' }
-    ] : []),
-    { icon: BookOpen, label: 'Blog & Guides', action: 'blog' },
-    { icon: Layers, label: 'Case Studies', action: 'usecases' },
-    { icon: HelpCircle, label: 'FAQ', action: 'faq' },
-    { icon: Info, label: 'About', action: 'about' },
+    ] : [
+      { icon: Shield, label: 'Redact', action: 'redact' }
+    ]),
     { icon: Shield, label: 'Privacy', action: 'privacy' },
     { icon: MessageSquare, label: 'Feedback', action: 'feedback' },
     ...(!isPro ? [
-      { icon: Key, label: 'Recover License', action: 'recover' }
+      { icon: Key, label: 'Recover', action: 'recover' }
     ] : [])
   ];
 

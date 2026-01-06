@@ -11,6 +11,7 @@ import BatchProcessor from './components/BatchProcessor';
 import CustomRulesManager from './components/CustomRulesManager';
 import FeedbackModal from './components/FeedbackModal';
 import MobileMenu from './components/MobileMenu';
+import ErrorBoundary from './components/ErrorBoundary';
 import { verifyProStatus } from './utils/proLicenseDB';
 
 function App() {
@@ -197,16 +198,6 @@ function App() {
 
           {/* Desktop Actions */}
           <div className="flex items-center gap-6 md:gap-8">
-            {currentView === 'landing' && (
-              <div className="hidden md:flex items-center gap-5 text-xs font-mono uppercase tracking-wider text-zinc-400">
-                <button onClick={() => scrollToSection('features')} className="hover:text-white transition-colors">Features</button>
-                <button onClick={() => scrollToSection('use-cases')} className="hover:text-white transition-colors">Use Cases</button>
-                <button onClick={() => scrollToSection('blog')} className="hover:text-white transition-colors">Blog</button>
-                <button onClick={() => scrollToSection('faq')} className="hover:text-white transition-colors">FAQ</button>
-                <button onClick={() => scrollToSection('about')} className="hover:text-white transition-colors">About</button>
-              </div>
-            )}
-
             {currentView === 'redactor' && (
               <button
                 onClick={handleGoToLanding}
@@ -216,22 +207,13 @@ function App() {
               </button>
             )}
 
-            {/* Pro Features */}
-            {isPro && (
-              <>
-                <button
-                  onClick={() => setShowBatchProcessor(true)}
-                  className="hidden sm:block text-xs font-mono text-zinc-400 hover:text-white transition-colors uppercase tracking-wider"
-                >
-                  Batch
-                </button>
-                <button
-                  onClick={() => setShowCustomRules(true)}
-                  className="hidden sm:block text-xs font-mono text-zinc-400 hover:text-white transition-colors uppercase tracking-wider"
-                >
-                  Rules
-                </button>
-              </>
+            {currentView === 'landing' && (
+              <button
+                onClick={handleGetStarted}
+                className="hidden sm:block text-xs font-mono text-zinc-400 hover:text-white transition-colors uppercase tracking-wider"
+              >
+                Redact
+              </button>
             )}
 
             <button
