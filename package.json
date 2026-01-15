@@ -22,6 +22,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.449",
     "prop-types": "^15.8.1",
+    "razorpay": "^2.9.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.6.0",
