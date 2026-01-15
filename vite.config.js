@@ -67,5 +67,21 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          pdfjs: ['pdfjs-dist'],
+          docx: ['docx', 'mammoth'],
+          ai: ['@xenova/transformers']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
+  },
+  optimizeDeps: {
+    include: ['@supabase/supabase-js']
+  }
 })
