@@ -3,41 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Anonymize resumes and documents entirely in your browser. Privacy-first PII redaction for blind hiring, portfolios, and case studies. Zero uploads, 100% local." />
-    <meta name="keywords" content="resume anonymizer, PII redaction, blind hiring, document redactor, privacy tool" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Redact confidential information from business documents entirely in your browser. Privacy-first PII redaction for companies, legal teams, and professionals. Zero uploads, 100% local." />
+    <meta name="keywords" content="document redactor, PII redaction, confidential documents, business document anonymizer, privacy tool" />
     
     <!-- Security Headers -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://pagead2.googlesyndication.com https://checkout.razorpay.com https://partner.googleadservices.com https://www.googletagmanager.com https://ep2.adtrafficquality.google; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://adservice.google.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.huggingface.co https://cdn-lfs.huggingface.co; frame-src https://checkout.razorpay.com https://api.razorpay.com https://tpc.googlesyndication.com https://googleads.g.doubleclick.net https://ep2.adtrafficquality.google https://www.google.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://*.huggingface.co https://cdn-lfs.huggingface.co; frame-src https://checkout.razorpay.com https://api.razorpay.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
     
     <title>Redactify - Privacy-First Document Anonymizer</title>
     
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              primary: '#3b82f6',
-              secondary: '#8b5cf6',
-            }
-          }
-        }
-      }
-    </script>
-    
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4222227304157753"
-     crossorigin="anonymous"></script>
     
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#3b82f6" />

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { X, RefreshCw, Sparkles } from 'lucide-react';
+import { X, RefreshCw, Sparkles, Download, AlertCircle, CheckCircle } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { detectPII, extractTextFromInput, highlightPII } from '../utils/piiDetector';
 import { usePIIDetection } from '../hooks/usePIIDetection';
@@ -7,11 +7,11 @@ import { useTransformersPII } from '../hooks/useTransformersPII';
 import { detectPIIHybrid } from '../utils/hybridDetection';
 import { getEnabledCustomRules } from '../utils/customRulesDB';
 import { getFileTypeFromMime } from '../utils/fileHelpers';
-import { showError, showSuccess } from '../utils/toast';
-import AdSenseSlot from './AdSenseSlot';
+import { showError, showSuccess, showWarning } from '../utils/toast';
+import { getFileSizeLimits } from '../utils/browserCompat';
 import DocumentViewer from './DocumentViewer';
 
-function Redactor({ onPIIDetected, detectedPII, isPro }) {
+function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
   const [text, setText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -19,6 +19,9 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
   const [customRules, setCustomRules] = useState([]);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileType, setFileType] = useState(null);
+  const [showModelNotice, setShowModelNotice] = useState(false);
+  const [modelCached, setModelCached] = useState(false);
+  const [userWantsAI, setUserWantsAI] = useState(true); // Default to AI enabled
   const abortControllerRef = React.useRef(null);
 
   // Use Web Worker hook for heavy processing (optional - falls back to main thread)
@@ -30,8 +33,25 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
     isModelLoading, 
     modelProgress, 
     modelError,
-    isModelCached 
+    isModelCached: checkModelCached
   } = useTransformersPII();
+
+  // Check if model is cached on mount
+  useEffect(() => {
+    const checkCache = async () => {
+      const cached = await checkModelCached();
+      setModelCached(cached);
+      
+      // Check if user has previously dismissed the notice
+      const dismissedNotice = localStorage.getItem('modelNoticeDismissed');
+      
+      if (!cached && !dismissedNotice) {
+        // Show notice only once per browser
+        setShowModelNotice(true);
+      }
+    };
+    checkCache();
+  }, [checkModelCached]);
 
   // Load custom rules on mount and when isPro changes
   useEffect(() => {
@@ -83,7 +103,9 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
     return () => {
       window.removeEventListener('customRulesUpdated', handleRulesUpdate);
     };
-  }, [isPro, text, detect, onPIIDetected, uploadedFile, fileType]);
+  // Intentionally excluding text, detect, onPIIDetected to prevent infinite loops
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPro]);
 
   // Memoize highlighted HTML to avoid unnecessary re-renders
   const highlightedHTML = useMemo(() => {
@@ -104,12 +126,12 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
       // Debounce detection for performance (real-time but not on every keystroke)
       setTimeout(async () => {
         try {
-          // Always use hybrid detection (AI + regex) - AI runs locally, 100% private
+          // Use hybrid detection (AI + regex) if user wants AI, otherwise regex-only
           let detected;
-          if (!modelError) {
+          if (userWantsAI && !modelError) {
             detected = await detectPIIHybrid(newText, detectWithML, customRules, true);
           } else {
-            // Fallback to regex-only if model fails to load
+            // Use regex-only if user opted out or model fails to load
             detected = await detect(newText, customRules);
           }
           onPIIDetected(detected, newText);
@@ -145,6 +167,16 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
     const file = e.dataTransfer.files[0];
     if (!file) return;
 
+    // Validate file size
+    const limits = getFileSizeLimits();
+    if (file.size > limits.maxFileSize) {
+      showError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum allowed is ${(limits.maxFileSize / 1024 / 1024).toFixed(0)}MB.`);
+      return;
+    }
+    if (file.size > limits.warningSize) {
+      showWarning(`Large file detected (${(file.size / 1024 / 1024).toFixed(1)}MB). Processing may take a moment...`);
+    }
+
     // Cancel any pending operations
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -165,9 +197,9 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
       
       setText(content);
 
-      // Always use hybrid detection (AI + regex)
+      // Use hybrid detection (AI + regex) if user wants AI, otherwise regex-only
       let detected;
-      if (!modelError) {
+      if (userWantsAI && !modelError) {
         detected = await detectPIIHybrid(content, detectWithML, customRules, true);
       } else {
         detected = await detect(content, customRules);
@@ -188,12 +220,23 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
         setIsProcessing(false);
       }
     }
-  }, [onPIIDetected, detect, customRules, modelError, detectWithML]);
+  }, [onPIIDetected, detect, customRules, modelError, detectWithML, userWantsAI]);
 
   // Handle file input with file extraction
   const handleFileInput = useCallback(async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Validate file size
+    const limits = getFileSizeLimits();
+    if (file.size > limits.maxFileSize) {
+      showError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum allowed is ${(limits.maxFileSize / 1024 / 1024).toFixed(0)}MB.`);
+      e.target.value = ''; // Reset input
+      return;
+    }
+    if (file.size > limits.warningSize) {
+      showWarning(`Large file detected (${(file.size / 1024 / 1024).toFixed(1)}MB). Processing may take a moment...`);
+    }
 
     // Cancel any pending operations
     if (abortControllerRef.current) {
@@ -217,9 +260,9 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
       
       setText(content);
 
-      // Always use hybrid detection (AI + regex)
+      // Use hybrid detection (AI + regex) if user wants AI, otherwise regex-only
       let detected;
-      if (!modelError) {
+      if (userWantsAI && !modelError) {
         detected = await detectPIIHybrid(content, detectWithML, customRules, true);
       } else {
         detected = await detect(content, customRules);
@@ -240,7 +283,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro }) {
         setIsProcessing(false);
       }
     }
-  }, [detect, customRules, onPIIDetected, modelError, detectWithML]);
+  }, [detect, customRules, onPIIDetected, modelError, detectWithML, userWantsAI]);
 
   // Sample resume text
   const loadSampleResume = useCallback(async () => {
@@ -280,9 +323,9 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
     
     try {
       setIsProcessing(true);
-      // Always use hybrid detection (AI + regex)
+      // Use hybrid detection (AI + regex) if user wants AI, otherwise regex-only
       let detected;
-      if (!modelError) {
+      if (userWantsAI && !modelError) {
         detected = await detectPIIHybrid(sample, detectWithML, customRules, true);
       } else {
         detected = await detect(sample, customRules);
@@ -298,39 +341,95 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
-      {/* AI Detection Status Bar */}
-      {(isModelLoading || modelError || isModelCached) && (
-        <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-3">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <div className="flex items-center gap-3">
-              {isModelLoading && (
-                <>
-                  <Sparkles className="w-5 h-5 text-blue-400 animate-pulse" />
-                  <div>
-                    <p className="text-sm font-medium text-zinc-300">
-                      Initializing AI Detection Engine... {modelProgress}%
-                    </p>
-                    <p className="text-xs text-zinc-500">One-time download • Runs 100% locally • Cached forever</p>
-                  </div>
-                </>
-              )}
-              {!isModelLoading && modelError && (
-                <>
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <p className="text-sm text-zinc-400">AI model unavailable - using pattern-based detection</p>
-                </>
-              )}
-              {!isModelLoading && !modelError && isModelCached && (
-                <>
-                  <Sparkles className="w-5 h-5 text-green-400" />
-                  <p className="text-sm text-zinc-400">AI-Powered Detection Active (100% Local & Private)</p>
-                </>
-              )}
+      {/* AI Model Download Notice */}
+      {showModelNotice && !modelCached && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-white/10 rounded-2xl max-w-lg w-full p-8 shadow-2xl">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <Download className="w-6 h-6 text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-white mb-2">AI Model Required</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  To enable advanced name detection with AI, we need to download a 20MB model file. This is a <strong>one-time download</strong> and will be cached for future use.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-950 border border-white/5 rounded-xl p-4 mb-6 space-y-3">
+              <div className="flex items-center gap-3 text-sm">
+                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <span className="text-zinc-300">100% offline after download</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <span className="text-zinc-300">Cached in your browser permanently</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <span className="text-zinc-300">Higher accuracy for name detection</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                <span className="text-zinc-300">Requires internet connection for first-time download</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowModelNotice(false);
+                  setUserWantsAI(true);
+                  localStorage.setItem('modelNoticeDismissed', 'true');
+                  showSuccess('AI detection enabled. Upload a document to begin.');
+                }}
+                className="flex-1 px-4 py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-200 transition-all"
+              >
+                Continue with AI
+              </button>
+              <button
+                onClick={() => {
+                  setShowModelNotice(false);
+                  setUserWantsAI(false);
+                  localStorage.setItem('modelNoticeDismissed', 'true');
+                  showSuccess('Using regex-only mode. Upload a document to begin.');
+                }}
+                className="px-4 py-3 bg-zinc-800 text-white font-medium rounded-xl hover:bg-zinc-700 transition-all border border-white/10"
+              >
+                Use Regex Only
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-600 text-center mt-4 font-mono">
+              Model: Xenova/bert-base-multilingual-cased-ner • Size: ~20MB
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Model Loading Progress */}
+      {isModelLoading && (
+        <div className="fixed top-4 right-4 z-40 bg-zinc-900 border border-blue-500/30 rounded-xl p-4 shadow-2xl max-w-sm animate-in slide-in-from-right duration-300">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Download className="w-4 h-4 text-blue-400 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-bold text-white mb-1">Downloading AI Model</h4>
+              <p className="text-xs text-zinc-400 mb-2">This will take a moment...</p>
+              <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300 rounded-full"
+                  style={{ width: `${modelProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-zinc-500 mt-1 font-mono">{Math.round(modelProgress)}%</p>
             </div>
           </div>
         </div>
       )}
-      
+
       {!text ? (
         // Empty State - Premium Upload Zone
         <div
@@ -520,6 +619,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                     fileType={fileType || 'txt'}
                     text={text}
                     detectedPII={detectedPII}
+                    onTogglePII={onTogglePII}
                   />
                 ) : uploadedFile ? (
                   // Document Viewer - Shows original document without highlights (no PII detected yet)
@@ -528,6 +628,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                     fileType={fileType}
                     text={text}
                     detectedPII={[]}
+                    onTogglePII={onTogglePII}
                   />
                 ) : (
                   // Text Editor - For manual text input
@@ -556,33 +657,6 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
               </div>
             </div>
           </div>
-
-          {/* AdSense - Bottom Ad (Only after substantial interaction) */}
-          {!isPro && detectedPII.length > 3 && text.length > 500 && (
-            <div className="flex-shrink-0 border-t border-white/5 bg-zinc-950/50 backdrop-blur-xl">
-              <div className="max-w-full mx-auto px-6 py-3">
-                <AdSenseSlot
-                  slot="RESULTS_FOOTER_SLOT_ID"
-                  format="horizontal"
-                  style={{ minHeight: '90px' }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* AdSense - After Successful Redaction */}
-          {!isPro && detectedPII.length > 0 && detectedPII.filter(p => p.redact).length > 0 && (
-            <div className="flex-shrink-0 bg-zinc-900/30 backdrop-blur-xl">
-              <div className="max-w-full mx-auto px-6 py-4 text-center">
-                <p className="text-xs text-zinc-500 mb-2 font-mono uppercase tracking-wide">Continue Using Free Tools</p>
-                <AdSenseSlot
-                  slot="POST_REDACTION_SLOT_ID"
-                  format="horizontal"
-                  style={{ minHeight: '100px' }}
-                />
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -598,6 +672,7 @@ Redactor.propTypes = {
     end: PropTypes.number.isRequired,
   })).isRequired,
   isPro: PropTypes.bool.isRequired,
+  onTogglePII: PropTypes.func.isRequired,
 };
 
 export default Redactor;

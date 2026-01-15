@@ -12,6 +12,7 @@ import CustomRulesManager from './components/CustomRulesManager';
 import FeedbackModal from './components/FeedbackModal';
 import MobileMenu from './components/MobileMenu';
 import ErrorBoundary from './components/ErrorBoundary';
+import BrowserCompatWarning from './components/BrowserCompatWarning';
 import { verifyProStatus } from './utils/proLicenseDB';
 
 function App() {
@@ -171,6 +172,9 @@ function App() {
 
   return (
     <div className="h-full flex flex-col bg-black transition-colors selection:bg-red-500 selection:text-white">
+      {/* Browser Compatibility Warning */}
+      <BrowserCompatWarning />
+      
       {/* Floating Navigation Bar */}
       <nav 
         style={{ 
@@ -293,6 +297,7 @@ function App() {
               onPIIDetected={handlePIIDetected}
               detectedPII={detectedPII}
               isPro={isPro}
+              onTogglePII={handleTogglePII}
             />
 
             {/* Sidebar - responsive */}

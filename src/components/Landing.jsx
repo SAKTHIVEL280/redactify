@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
-import AdSenseSlot from './AdSenseSlot';
 import PrivacyModal from './PrivacyModal';
-import Blog from './Blog';
-import FAQ from './FAQ';
-import About from './About';
-import UseCaseDeepDives from './UseCaseDeepDives';
 
 export default function Landing({ onGetStarted, isPro }) {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -64,7 +59,7 @@ export default function Landing({ onGetStarted, isPro }) {
 
           {/* Subheading */}
           <p className="text-lg md:text-xl text-zinc-400 max-w-2xl mx-auto font-light mb-12 leading-relaxed animate-on-load transition-all duration-700">
-            Anonymize resumes and documents instantly in your browser.
+            Redact confidential business documents instantly in your browser.
             No uploads, no tracking, no accounts.
           </p>
 
@@ -241,7 +236,7 @@ export default function Landing({ onGetStarted, isPro }) {
               Who Uses Redactify?
             </h2>
             <p className="text-xl text-zinc-400 font-light max-w-3xl mx-auto leading-relaxed">
-              Privacy protection for everyone.
+              Trusted by businesses to protect confidential information.
             </p>
           </div>
 
@@ -251,35 +246,13 @@ export default function Landing({ onGetStarted, isPro }) {
               {
                 icon: (
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
                 ),
-                title: 'HR Teams',
-                subtitle: 'Unbiased Hiring',
-                description: 'Remove names and contact info from resumes for blind screening. Focus on skills, not demographics.',
+                title: 'Enterprises',
+                subtitle: 'Bulk Redaction',
+                description: 'Process confidential contracts, NDAs, and internal documents in batches. Maintain compliance while sharing sensitive materials.',
                 badge: 'Batch Processing',
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                ),
-                title: "Job Seekers",
-                subtitle: "Safe Sharing",
-                description: "Share your resume in portfolios or forums without exposing personal details until you're ready.",
-                badge: "Privacy First",
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                ),
-                title: 'Freelancers',
-                subtitle: 'NDA Compliance',
-                description: 'Redact client names from case studies and proposals before sharing publicly on LinkedIn or your portfolio.',
-                badge: 'Confidential',
               },
               {
                 icon: (
@@ -289,8 +262,30 @@ export default function Landing({ onGetStarted, isPro }) {
                 ),
                 title: 'Legal Teams',
                 subtitle: 'Compliance',
-                description: 'Meet GDPR and CCPA requirements by redacting PII while preserving document structure for audits.',
+                description: 'Meet GDPR, CCPA, and HIPAA requirements by automatically redacting PII while preserving document structure for audits.',
                 badge: 'Regulated',
+              },
+              {
+                icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                ),
+                title: 'HR Teams',
+                subtitle: 'Blind Screening',
+                description: 'Remove names and contact info from candidate resumes for unbiased hiring. Focus on skills and qualifications only.',
+                badge: 'Bias Reduction',
+              },
+              {
+                icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                ),
+                title: 'Consultants',
+                subtitle: 'NDA Compliance',
+                description: 'Redact client names and proprietary information from case studies before public sharing while maintaining impact.',
+                badge: 'Confidential',
               },
             ].map((card, i) => (
               <div
@@ -352,19 +347,19 @@ export default function Landing({ onGetStarted, isPro }) {
                 {
                   step: '01',
                   title: 'Upload Your Document',
-                  description: 'Drop a resume, paste text, or try our sample. Processing starts instantly in your browser.',
-                  detail: 'Supports .txt files (PDF & DOCX coming soon)',
+                  description: 'Drop any confidential document or paste text. Processing starts instantly in your browser.',
+                  detail: 'Supports TXT, PDF, DOCX formats',
                 },
                 {
                   step: '02',
                   title: 'AI Detection & Review',
                   description: 'Our local AI engine highlights sensitive info in real-time. Toggle individual items to keep or redact.',
-                  detail: 'AI-powered name detection + pattern matching',
+                  detail: 'AI-powered detection + custom rules',
                 },
                 {
                   step: '03',
                   title: 'Export & Share',
-                  description: 'Download your anonymized document as plain text. Pro users get DOCX and PDF exports.',
+                  description: 'Download your redacted document. Pro users get DOCX and PDF exports with formatting preservation.',
                   detail: 'Zero data uploads • Forever private',
                 },
               ].map((item, i) => (
@@ -392,19 +387,7 @@ export default function Landing({ onGetStarted, isPro }) {
             </div>
           </div>
         </div>
-      </section >
-
-      {/* Deep Case Studies */}
-      <UseCaseDeepDives />
-
-      {/* Long-form Blog Content */}
-      <Blog />
-
-      {/* FAQ Section */}
-      <FAQ />
-
-      {/* About & Mission */}
-      <About />
+      </section>
 
       {/* Final CTA - Full Width Immersive */}
       <section className="relative z-10 px-6 py-40 border-t border-white/5 overflow-hidden">
@@ -464,37 +447,6 @@ export default function Landing({ onGetStarted, isPro }) {
         </div>
       </section>
 
-      {/* AdSense Slot (Middle - Between FAQ and Footer) */}
-      {
-        !isPro && (
-          <div className="relative z-10 px-6 py-8 border-t border-white/5 bg-zinc-900/20">
-            <div className="max-w-3xl mx-auto">
-              <p className="text-xs text-center text-zinc-600 mb-3 font-mono uppercase tracking-wide">Sponsored</p>
-              <AdSenseSlot
-                slot="LANDING_MID_SLOT_ID"
-                format="horizontal"
-                style={{ minHeight: '100px' }}
-              />
-            </div>
-          </div>
-        )
-      }
-
-      {/* AdSense Slot (Bottom) */}
-      {
-        !isPro && (
-          <div className="relative z-10 px-6 py-12 border-t border-white/5">
-            <div className="max-w-3xl mx-auto">
-              <AdSenseSlot
-                slot="LANDING_FOOTER_SLOT_ID"
-                format="horizontal"
-                style={{ minHeight: '90px' }}
-              />
-            </div>
-          </div>
-        )
-      }
-
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-6 py-12">
@@ -503,7 +455,7 @@ export default function Landing({ onGetStarted, isPro }) {
             <div className="md:col-span-1">
               <div className="text-xl font-bold text-white mb-3">Redactify</div>
               <p className="text-sm text-zinc-500 leading-relaxed">
-                Privacy-first document anonymizer. Remove sensitive information instantly in your browser.
+                Privacy-first business document redactor. Remove sensitive information instantly in your browser.
               </p>
             </div>
 
@@ -514,7 +466,6 @@ export default function Landing({ onGetStarted, isPro }) {
                 <li><a href="#features" className="text-sm text-zinc-500 hover:text-white transition-colors">Features</a></li>
                 <li><a href="#how-it-works" className="text-sm text-zinc-500 hover:text-white transition-colors">How It Works</a></li>
                 <li><a href="#use-cases" className="text-sm text-zinc-500 hover:text-white transition-colors">Use Cases</a></li>
-                <li><a href="#usecases-deep" className="text-sm text-zinc-500 hover:text-white transition-colors">Case Studies</a></li>
                 <li><button onClick={onGetStarted} className="text-sm text-zinc-500 hover:text-white transition-colors text-left">Get Started</button></li>
               </ul>
             </div>
@@ -523,10 +474,8 @@ export default function Landing({ onGetStarted, isPro }) {
             <div>
               <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Resources</h3>
               <ul className="space-y-2">
-                <li><a href="#blog" className="text-sm text-zinc-500 hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#faq" className="text-sm text-zinc-500 hover:text-white transition-colors">FAQ</a></li>
-                <li><a href="#about" className="text-sm text-zinc-500 hover:text-white transition-colors">About</a></li>
                 <li><a href="mailto:support@redactify.com" className="text-sm text-zinc-500 hover:text-white transition-colors">Support</a></li>
+                <li><button onClick={() => setShowPrivacyModal(true)} className="text-sm text-zinc-500 hover:text-white transition-colors text-left">Privacy Policy</button></li>
               </ul>
             </div>
 
@@ -559,6 +508,6 @@ export default function Landing({ onGetStarted, isPro }) {
 
       {/* Privacy Modal */}
       <PrivacyModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
-    </div >
+    </div>
   );
 }

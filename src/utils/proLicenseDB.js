@@ -1,7 +1,14 @@
 // IndexedDB utility for Pro license key storage with encryption
+// Falls back to localStorage in Safari private mode
+import { checkIndexedDB, localStorageFallback } from './browserCompat';
+
 const DB_NAME = 'ResumeRedactorDB';
 const DB_VERSION = 2; // Must match customRulesDB version
 const STORE_NAME = 'proLicense';
+const LOCALSTORAGE_KEY = 'redactify_pro_license_encrypted';
+
+// Track if we're using fallback storage
+let useLocalStorageFallback = false;
 
 // Derive encryption key from browser fingerprint
 async function getEncryptionKey() {
@@ -70,26 +77,31 @@ async function decryptData(encryptedBase64) {
   }
 }
 
-// Initialize IndexedDB
-const initDB = () => {
-  return new Promise((resolve, reject) => {
-    // Check IndexedDB availability (fails in Safari private mode)
-    if (!window.indexedDB) {
-      reject(new Error('IndexedDB not available. Please disable private browsing mode.'));
-      return;
-    }
+// Initialize IndexedDB with localStorage fallback
+const initDB = async () => {
+  // Check if IndexedDB is available
+  const idbCheck = await checkIndexedDB();
+  
+  if (!idbCheck.available) {
+    console.warn('IndexedDB not available, using localStorage fallback:', idbCheck.reason);
+    useLocalStorageFallback = true;
+    return null; // Return null to indicate fallback mode
+  }
 
+  return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     
     request.onerror = () => {
       const error = request.error;
-      if (error.name === 'InvalidStateError') {
-        reject(new Error('IndexedDB not available in private mode. Please disable private browsing.'));
-      } else {
-        reject(error);
-      }
+      console.error('IndexedDB error, falling back to localStorage:', error);
+      useLocalStorageFallback = true;
+      resolve(null); // Don't reject, use fallback
     };
-    request.onsuccess = () => resolve(request.result);
+    
+    request.onsuccess = () => {
+      useLocalStorageFallback = false;
+      resolve(request.result);
+    };
     
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
@@ -100,13 +112,9 @@ const initDB = () => {
   });
 };
 
-// Store Pro license key
+// Store Pro license key with localStorage fallback
 export const storeProKey = async (licenseData) => {
   try {
-    const db = await initDB();
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
-    
     const plainData = {
       key: licenseData.key,
       orderId: licenseData.orderId,
@@ -124,8 +132,18 @@ export const storeProKey = async (licenseData) => {
       encrypted: encryptedData,
       timestamp: Date.now()
     };
+
+    // Try IndexedDB first
+    const db = await initDB();
+    if (db && !useLocalStorageFallback) {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      await store.put(data);
+    } else {
+      // Fallback to localStorage
+      await localStorageFallback.setItem(LOCALSTORAGE_KEY, data);
+    }
     
-    await store.put(data);
     return { success: true, data: plainData };
   } catch (error) {
     console.error('Error storing Pro key:', error);
@@ -133,35 +151,38 @@ export const storeProKey = async (licenseData) => {
   }
 };
 
-// Retrieve Pro license key
+// Retrieve Pro license key with localStorage fallback
 export const getProKey = async () => {
   try {
     const db = await initDB();
-    const transaction = db.transaction([STORE_NAME], 'readonly');
-    const store = transaction.objectStore(STORE_NAME);
     
-    return new Promise((resolve, reject) => {
-      const request = store.get('pro_license');
-      request.onsuccess = async () => {
-        const result = request.result;
-        if (result && result.encrypted) {
-          try {
-            const decryptedData = await decryptData(result.encrypted);
-            if (decryptedData && decryptedData.isActive) {
-              resolve({ isValid: true, data: decryptedData });
-            } else {
-              resolve({ isValid: false, data: null });
-            }
-          } catch (decryptError) {
-            console.error('Decryption failed:', decryptError);
-            resolve({ isValid: false, data: null });
-          }
-        } else {
-          resolve({ isValid: false, data: null });
+    let result;
+    if (db && !useLocalStorageFallback) {
+      // Try IndexedDB
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      result = await new Promise((resolve) => {
+        const request = store.get('pro_license');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+      });
+    } else {
+      // Fallback to localStorage
+      result = await localStorageFallback.getItem(LOCALSTORAGE_KEY);
+    }
+
+    if (result && result.encrypted) {
+      try {
+        const decryptedData = await decryptData(result.encrypted);
+        if (decryptedData && decryptedData.isActive) {
+          return { isValid: true, data: decryptedData };
         }
-      };
-      request.onerror = () => reject(request.error);
-    });
+      } catch (decryptError) {
+        console.error('Decryption failed:', decryptError);
+      }
+    }
+    
+    return { isValid: false, data: null };
   } catch (error) {
     console.error('Error retrieving Pro key:', error);
     return { isValid: false, data: null };
@@ -174,17 +195,21 @@ export const verifyProStatus = async () => {
   return result.isValid;
 };
 
-// Delete Pro license (for testing/refund scenarios)
+// Delete Pro license (for testing/refund scenarios) with localStorage fallback
 export const deleteProKey = async () => {
   try {
     const db = await initDB();
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
     
-    await store.delete('pro_license');
+    if (db && !useLocalStorageFallback) {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      await store.delete('pro_license');
+    } else {
+      await localStorageFallback.removeItem(LOCALSTORAGE_KEY);
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('Error deleting Pro key:', error);
     return { success: false, error: error.message };
-  }
-};
+  }};

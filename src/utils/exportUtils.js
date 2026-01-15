@@ -57,7 +57,7 @@ export const exportAsTXT = (text, originalFilename = null) => {
 };
 
 // Export as DOCX (Pro tier only)
-export const exportAsDOCX = async (text, originalFilename = null) => {
+export const exportAsDOCX = async (text, originalFilename = null, originalFile = null, piiItems = []) => {
   let link = null;
   try {
     // Generate filename from original or use default
@@ -67,7 +67,119 @@ export const exportAsDOCX = async (text, originalFilename = null) => {
       filename = `${nameWithoutExt}_redacted.docx`;
     }
     
-    // Split text into paragraphs
+    // If original file is a DOCX, preserve ALL formatting by carefully replacing text
+    if (originalFile && originalFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      try {
+        const JSZip = (await import('jszip')).default;
+        const arrayBuffer = await originalFile.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        
+        // Read document.xml
+        const documentXML = await zip.file('word/document.xml').async('string');
+        
+        // Parse XML
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(documentXML, 'text/xml');
+        
+        // Get namespace for Word elements
+        const wNamespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+        
+        // Strategy: Build character-to-node mapping, then replace text while keeping structure
+        const textNodes = [];
+        let currentPosition = 0;
+        
+        // Find all w:t text nodes and map their positions
+        const getAllTextNodes = (element) => {
+          const tElements = element.getElementsByTagNameNS(wNamespace, 't');
+          for (let i = 0; i < tElements.length; i++) {
+            const node = tElements[i];
+            const nodeText = node.textContent;
+            textNodes.push({
+              node: node,
+              startPos: currentPosition,
+              endPos: currentPosition + nodeText.length,
+              originalText: nodeText
+            });
+            currentPosition += nodeText.length;
+          }
+        };
+        
+        getAllTextNodes(xmlDoc);
+        
+        // Build original text from nodes
+        const originalText = textNodes.map(n => n.originalText).join('');
+        
+        // The 'text' parameter is already redacted, we need to map it back
+        // Problem: redacted text may have different length than original
+        
+        // Better approach: Use character-by-character mapping
+        // Create a mapping of which characters to keep/replace
+        const charMap = new Array(originalText.length).fill(null).map((_, i) => originalText[i]);
+        
+        // If we have PII items, replace them in the character map
+        if (piiItems && piiItems.length > 0) {
+          const sortedPII = [...piiItems].filter(p => p.redact).sort((a, b) => b.start - a.start);
+          
+          for (const pii of sortedPII) {
+            const replacement = pii.suggested || `[${pii.type.toUpperCase()} REDACTED]`;
+            // Replace in charMap
+            const before = charMap.slice(0, pii.start);
+            const after = charMap.slice(pii.end);
+            charMap.splice(0, charMap.length, ...before, ...replacement.split(''), ...after);
+          }
+        }
+        
+        // Now map the character array back to text nodes
+        const newText = charMap.join('');
+        let textIndex = 0;
+        
+        for (const nodeInfo of textNodes) {
+          const nodeLength = nodeInfo.endPos - nodeInfo.startPos;
+          const newNodeText = newText.substring(textIndex, textIndex + nodeLength);
+          nodeInfo.node.textContent = newNodeText;
+          
+          // Preserve xml:space attribute for leading/trailing spaces
+          if (newNodeText.startsWith(' ') || newNodeText.endsWith(' ') || /\s{2,}/.test(newNodeText)) {
+            nodeInfo.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+          }
+          
+          textIndex += nodeLength;
+        }
+        
+        // Serialize back
+        const serializer = new XMLSerializer();
+        let modifiedXML = serializer.serializeToString(xmlDoc);
+        
+        // Fix namespace declarations if needed
+        if (!modifiedXML.includes('xmlns:w=')) {
+          modifiedXML = modifiedXML.replace(
+            '<w:document',
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+          );
+        }
+        
+        // Update ZIP
+        zip.file('word/document.xml', modifiedXML);
+        
+        // Generate DOCX
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(blob);
+        link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        URL.revokeObjectURL(url);
+        
+        return { success: true, preservedFormat: true };
+      } catch (formatError) {
+        console.error('Failed to preserve DOCX format:', formatError);
+        console.log('Error details:', formatError.message);
+        // Fall through to plain text export
+      }
+    }
+    
+    // Fallback: Create new DOCX from plain text
     const paragraphs = text.split('\n').map(line => 
       new Paragraph({
         children: [new TextRun(line || ' ')],
@@ -91,7 +203,7 @@ export const exportAsDOCX = async (text, originalFilename = null) => {
     link.click();
     URL.revokeObjectURL(url);
     
-    return { success: true };
+    return { success: true, preservedFormat: false };
   } catch (error) {
     return { success: false, error: error.message };
   } finally {

@@ -44,6 +44,21 @@ export const showInfo = (message) => {
 };
 
 /**
+ * Show warning toast notification
+ */
+export const showWarning = (message) => {
+  toast(message, {
+    duration: 4000,
+    icon: '⚠️',
+    style: {
+      background: '#18181b',
+      color: '#fff',
+      border: '1px solid rgba(234, 179, 8, 0.5)',
+    },
+  });
+};
+
+/**
  * Show loading toast notification
  */
 export const showLoading = (message) => {

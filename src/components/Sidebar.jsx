@@ -4,7 +4,6 @@ import { replacePII, getPIIStats, PII_TYPES } from '../utils/piiDetector';
 import { exportAsTXT, exportAsDOCX, exportAsPDF } from '../utils/exportUtils';
 import { verifyProStatus } from '../utils/proLicenseDB';
 import { showError } from '../utils/toast';
-import AdSenseSlot from './AdSenseSlot';
 import { X } from 'lucide-react';
 
 function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploadedFile, fileType, onClose }) {
@@ -41,9 +40,11 @@ function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploaded
     try {
       const redacted = replacePII(originalText, piiItems);
       const filename = uploadedFile ? uploadedFile.name : null;
-      const result = await exportAsDOCX(redacted, filename);
+      const result = await exportAsDOCX(redacted, filename, uploadedFile, piiItems);
       if (!result.success) {
         showError(`Failed to export DOCX: ${result.error}`);
+      } else if (result.preservedFormat) {
+        showSuccess('Exported with original formatting preserved');
       }
     } catch (error) {
       showError(`Export failed: ${error.message}`);
@@ -201,27 +202,6 @@ function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploaded
           </div>
         </div>
       </div>
-
-      {/* Ads Section - Scrollable if needed */}
-      {!isPro && piiItems.length > 0 && (
-        <div className="p-3 bg-zinc-900/30 border-t border-white/10 overflow-y-auto max-h-[300px] flex-shrink-0">
-          <AdSenseSlot
-            slot="SIDEBAR_SLOT_ID"
-            format="rectangle"
-            style={{ minHeight: '250px', display: 'block' }}
-          />
-          {stats.accepted > 0 && (
-            <div className="mt-3 pt-3 border-t border-white/10">
-              <p className="text-xs text-center text-zinc-600 mb-2 font-mono">Support this free tool</p>
-              <AdSenseSlot
-                slot="SIDEBAR_DOWNLOAD_SLOT_ID"
-                format="rectangle"
-                style={{ minHeight: '200px', display: 'block' }}
-              />
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -13,6 +13,12 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
   const [email, setEmail] = useState('');
   const [savedLicenseData, setSavedLicenseData] = useState(null);
 
+  // Razorpay configuration
+  // TODO: Replace with production key from https://dashboard.razorpay.com/
+  // Development: rzp_test_XXXXX | Production: rzp_live_XXXXX
+  const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || 'rzp_test_XXXXX';
+  const PRICE = 159900; // ₹1,599 in paise
+
   const handlePayment = async () => {
     setLoading(true);
     setError(null);
