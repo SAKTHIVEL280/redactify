@@ -30,7 +30,6 @@ npm run preview
 - ✅ **Razorpay Pro Integration** - ₹1,599 one-time payment (~$19 USD)
 - ✅ **DOCX/PDF Export** - Pro tier feature using `docx` and `pdf-lib`
 - ✅ **IndexedDB License Storage** - Pro keys stored locally
-- ✅ **AdSense Integration** - 3 ad slots (free users only, Pro = ad-free)
 - ✅ **GDPR Cookie Banner** - Granular consent for cookies
 - ✅ **Enhanced PWA** - Offline support, install prompt, service worker
 - ✅ **Payment APIs** - Vercel Edge Functions for order creation/verification

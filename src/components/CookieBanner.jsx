@@ -12,7 +12,7 @@ const CookieBanner = () => {
   }, []);
 
   const handleAccept = () => {
-    const allAccepted = { necessary: true, analytics: true, adsense: true };
+    const allAccepted = { necessary: true, analytics: true };
     localStorage.setItem('cookie_preferences', JSON.stringify(allAccepted));
     setIsVisible(false);
   };

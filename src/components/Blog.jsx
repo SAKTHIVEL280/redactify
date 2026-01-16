@@ -1,6 +1,6 @@
 import React from 'react';
 
-// Long-form educational content to satisfy AdSense high-value content requirements
+// Educational content for users about privacy and PII handling
 // All text is original and focused on privacy, compliance, and resume redaction best practices
 export default function Blog() {
   const articles = [

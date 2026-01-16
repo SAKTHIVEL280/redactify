@@ -18,7 +18,7 @@ export default function About() {
 
   const milestones = [
     { year: '2023', title: 'Prototype', text: 'Built the first local-only PII detector for resumes; validated accuracy on synthetic datasets.' },
-    { year: '2024', title: 'PWA + Pro', text: 'Shipped offline support, DOCX/PDF exports, and consent-aware monetization with AdSense and Pro tiers.' },
+    { year: '2024', title: 'PWA + Pro', text: 'Shipped offline support, DOCX/PDF exports, and Pro licensing for premium features.' },
     { year: '2025', title: 'Content & Compliance', text: 'Expanded education hub, added compliance guides, and tuned ad placements to respect high-value content rules.' },
   ];
 
@@ -58,7 +58,7 @@ export default function About() {
               Our product decisions map directly to trust principles. We minimize storage, avoid servers for document processing, and default to opt-in for any telemetry. For monetization, we keep ads off empty states and tie their appearance to meaningful content and consent. Pro features focus on power-user workflows—batch processing, custom rules, and premium exports—without compromising local-only guarantees.
             </p>
             <p className="text-base text-zinc-400 leading-relaxed">
-              Education is part of the product. The content hub you see on this page shares playbooks for candidates, recruiters, and legal teams so everyone understands how to handle PII responsibly. This balances our utility (a tool) with high-value guidance (publisher content) that AdSense requires.
+              Education is part of the product. The content hub you see on this page shares playbooks for candidates, recruiters, and legal teams so everyone understands how to handle PII responsibly.
             </p>
           </div>
 

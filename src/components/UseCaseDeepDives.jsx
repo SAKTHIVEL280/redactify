@@ -39,7 +39,7 @@ export default function UseCaseDeepDives() {
       paragraphs: [
         'Map each redaction rule to a policy citation (e.g., GDPR data minimization, CCPA purpose limitation). Store the rule set in version control and track changes. When responding to data subject requests, use the local redactor to produce minimally necessary copies instead of handling raw originals.',
         'For cross-border hiring, maintain region-specific rule profiles. Example: EU profiles remove phone numbers and addresses by default; US profiles may retain city/state but drop street-level detail. This ensures consistent treatment across offices and simplifies internal audits.',
-        'Log when ads and analytics are shown to prove that monetization does not precede content. Pair logs with consent receipts for cookie choices. This record helps demonstrate that the site avoids “Google-served ads on screens without publisher content,” aligning with AdSense guidance.',
+        'Log analytics events with user consent to understand feature usage and improve the product. Pair logs with consent receipts for cookie choices to maintain transparency.',
       ],
     },
   ];
