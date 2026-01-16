@@ -63,6 +63,92 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
     return formatText(highlighted);
   }, [text, detectedPII, formatText]);
 
+  const getHighlightedDOCXContent = useCallback(() => {
+    if (!docxHtml || !detectedPII || detectedPII.length === 0) {
+      return docxHtml;
+    }
+
+    // Create a temporary div to parse the HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = docxHtml;
+
+    // Process each PII detection
+    detectedPII.forEach((pii) => {
+      if (!pii.value) return;
+
+      // Walk through all text nodes and replace matches
+      const walker = document.createTreeWalker(
+        tempDiv,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+
+      const nodesToProcess = [];
+      let node;
+      while ((node = walker.nextNode())) {
+        if (node.nodeValue && node.nodeValue.includes(pii.value)) {
+          nodesToProcess.push(node);
+        }
+      }
+
+      // Process nodes (do this after walking to avoid modification during traversal)
+      nodesToProcess.forEach((node) => {
+        const nodeText = node.nodeValue;
+        const index = nodeText.indexOf(pii.value);
+        
+        if (index === -1) return;
+
+        const before = nodeText.substring(0, index);
+        const match = pii.value;
+        const after = nodeText.substring(index + match.length);
+
+        // Create mark element with styling
+        const colorClass = pii.redact 
+          ? `px-1 rounded cursor-pointer transition-colors ${getPIIColorClass(pii.type)}`
+          : 'px-1 rounded cursor-pointer transition-colors bg-gray-200 line-through opacity-50';
+        
+        const title = `${pii.type}: ${pii.redact ? 'Will be redacted' : 'Ignored'} → ${pii.suggested}`;
+        
+        const mark = document.createElement('mark');
+        mark.className = colorClass;
+        mark.setAttribute('title', title);
+        mark.setAttribute('data-pii-id', pii.id);
+        mark.textContent = match;
+
+        // Replace text node with fragments
+        const parent = node.parentNode;
+        if (parent) {
+          if (before) parent.insertBefore(document.createTextNode(before), node);
+          parent.insertBefore(mark, node);
+          if (after) parent.insertBefore(document.createTextNode(after), node);
+          parent.removeChild(node);
+        }
+      });
+    });
+
+    return tempDiv.innerHTML;
+  }, [docxHtml, detectedPII]);
+
+  const getPIIColorClass = (type) => {
+    const colorMap = {
+      'email': 'bg-blue-200',
+      'phone': 'bg-green-200',
+      'name': 'bg-red-200',
+      'url': 'bg-purple-200',
+      'address': 'bg-orange-200',
+      'ssn': 'bg-yellow-200',
+      'credit_card': 'bg-pink-200',
+      'dob': 'bg-indigo-200',
+      'passport': 'bg-cyan-200',
+      'ip': 'bg-teal-200',
+      'bank_account': 'bg-rose-200',
+      'tax_id': 'bg-amber-200',
+      'age': 'bg-lime-200'
+    };
+    return colorMap[type] || 'bg-gray-200';
+  };
+
   const handlePIIClick = useCallback((e) => {
     const target = e.target;
     if (target.tagName === 'MARK' && target.hasAttribute('data-id')) {
@@ -87,7 +173,11 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
         {fileType === 'docx' && docxHtml ? (
           <div 
             className="docx-content bg-white rounded-lg shadow-lg p-8"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(docxHtml) }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getHighlightedDOCXContent(), {
+              ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'mark', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'span', 'div'],
+              ALLOWED_ATTR: ['class', 'title', 'data-pii-id', 'style'],
+              KEEP_CONTENT: true
+            }) }}
           />
         ) : (
           <div 
