@@ -44,12 +44,14 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
         order_id: orderData.id,
         handler: async (response) => {
           try {
+            console.log('Payment response:', response);
             const { data: verifyData } = await axios.post('/api/verify', {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature
             });
 
+            console.log('Verification response:', verifyData);
             if (verifyData.success) {
               const licenseData = {
                 key: verifyData.licenseKey,
@@ -62,9 +64,11 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
               setSavedLicenseData(licenseData);
               setShowEmailPrompt(true);
             } else {
+              console.error('Verification failed:', verifyData);
               setError('Payment verification failed.');
             }
           } catch (err) {
+            console.error('Verification error:', err, err.response?.data);
             setError('Payment verification failed.');
           }
         },
