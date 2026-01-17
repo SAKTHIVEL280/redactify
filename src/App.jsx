@@ -7,6 +7,9 @@ import Privacy from './components/Privacy';
 import ProModal from './components/ProModal';
 import LicenseRecovery from './components/LicenseRecovery';
 import CookieBanner from './components/CookieBanner';
+import Contact from './components/Contact';
+import Terms from './components/Terms';
+import Refunds from './components/Refunds';
 import BatchProcessor from './components/BatchProcessor';
 import CustomRulesManager from './components/CustomRulesManager';
 import FeedbackModal from './components/FeedbackModal';
@@ -26,6 +29,9 @@ function App() {
   const [showCustomRules, setShowCustomRules] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showContact, setShowContact] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showRefunds, setShowRefunds] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024); // Start closed on mobile
   const [isPro, setIsPro] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -289,7 +295,26 @@ function App() {
         data-scroll-container
       >
         {currentView === 'landing' ? (
-          <Landing onGetStarted={handleGetStarted} isPro={isPro} />
+          <Landing 
+            onGetStarted={handleGetStarted} 
+            isPro={isPro} 
+            onNavigate={(action) => {
+              switch (action) {
+                case 'contact':
+                  setShowContact(true);
+                  break;
+                case 'terms':
+                  setShowTerms(true);
+                  break;
+                case 'refunds':
+                  setShowRefunds(true);
+                  break;
+
+                default:
+                  break;
+              }
+            }}
+          />
         ) : (
           <div className="flex-1 flex overflow-hidden">
             {/* Redactor Area */}
@@ -406,6 +431,16 @@ function App() {
             case 'about':
               goToSection('about');
               break;
+            case 'contact':
+              setShowContact(true);
+              break;
+            case 'terms':
+              setShowTerms(true);
+              break;
+            case 'refunds':
+              setShowRefunds(true);
+              break;
+
             case 'usecases':
               goToSection('usecases-deep');
               break;
@@ -414,6 +449,12 @@ function App() {
           }
         }}
       />
+
+      {/* Policy Modals */}
+      {showContact && <Contact onClose={() => setShowContact(false)} />}
+      {showTerms && <Terms onClose={() => setShowTerms(false)} />}
+      {showRefunds && <Refunds onClose={() => setShowRefunds(false)} />}
+
 
       {/* Cookie Banner */}
       <CookieBanner />

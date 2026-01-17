@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
 import PrivacyModal from './PrivacyModal';
 
-export default function Landing({ onGetStarted, isPro }) {
+export default function Landing({ onGetStarted, isPro, onNavigate }) {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   useEffect(() => {
@@ -476,6 +476,10 @@ export default function Landing({ onGetStarted, isPro }) {
               <ul className="space-y-2">
                 <li><a href="mailto:support@redactify.com" className="text-sm text-zinc-500 hover:text-white transition-colors">Support</a></li>
                 <li><button onClick={() => setShowPrivacyModal(true)} className="text-sm text-zinc-500 hover:text-white transition-colors text-left">Privacy Policy</button></li>
+                <li><button onClick={() => onNavigate('contact')} className="text-sm text-zinc-500 hover:text-white transition-colors text-left">Contact Us</button></li>
+                <li><button onClick={() => onNavigate('terms')} className="text-sm text-zinc-500 hover:text-white transition-colors text-left">Terms & Conditions</button></li>
+                <li><button onClick={() => onNavigate('refunds')} className="text-sm text-zinc-500 hover:text-white transition-colors text-left">Refunds Policy</button></li>
+
               </ul>
             </div>
 
