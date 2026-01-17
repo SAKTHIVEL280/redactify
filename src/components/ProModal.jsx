@@ -38,8 +38,9 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
         key: razorpayKey,
         amount: orderData.amount,
         currency: orderData.currency,
-        name: 'Resume Redactor Pro',
-        description: 'Lifetime License',
+        name: 'Redactify Pro',
+        description: 'Lifetime License - Privacy-First Document Redaction',
+        image: 'https://redactify.daeq.in/pwa-192x192.png',
         order_id: orderData.id,
         handler: async (response) => {
           try {
