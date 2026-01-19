@@ -6,6 +6,10 @@ export default function Landing({ onGetStarted, isPro, onNavigate }) {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   useEffect(() => {
+    console.log('Landing component - isPro:', isPro);
+  }, [isPro]);
+
+  useEffect(() => {
     // Entry animations
     const elements = document.querySelectorAll('.animate-on-load');
     elements.forEach((el, index) => {

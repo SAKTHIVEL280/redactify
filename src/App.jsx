@@ -233,6 +233,24 @@ function App() {
               Privacy
             </button>
 
+            {isPro && currentView === 'redactor' && (
+              <>
+                <button
+                  onClick={() => setShowBatchProcessor(true)}
+                  className="hidden sm:block text-xs font-mono text-zinc-400 hover:text-white transition-colors uppercase tracking-wider"
+                >
+                  Batch
+                </button>
+
+                <button
+                  onClick={() => setShowCustomRules(true)}
+                  className="hidden sm:block text-xs font-mono text-zinc-400 hover:text-white transition-colors uppercase tracking-wider"
+                >
+                  Rules
+                </button>
+              </>
+            )}
+
             <button
               onClick={() => setShowFeedback(true)}
               className="hidden sm:block text-xs font-mono text-zinc-400 hover:text-white transition-colors uppercase tracking-wider"
