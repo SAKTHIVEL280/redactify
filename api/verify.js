@@ -34,6 +34,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('Verify API called with body:', req.body);
+    
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -42,46 +44,77 @@ export default async function handler(req, res) {
 
     // Validate input
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      console.log('Missing required fields');
       return res.status(400).json({ 
         error: 'Missing required fields',
         success: false 
       });
     }
 
+    // Check if secret exists
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      console.error('RAZORPAY_KEY_SECRET not configured');
+      return res.status(500).json({ 
+        error: 'Payment gateway not configured',
+        success: false 
+      });
+    }
+
     // Verify signature
+    console.log('Verifying signature...');
     const generatedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex');
 
+    console.log('Generated signature:', generatedSignature);
+    console.log('Received signature:', razorpay_signature);
+
     if (generatedSignature !== razorpay_signature) {
+      console.log('Signature mismatch');
       return res.status(400).json({ 
         error: 'Invalid signature',
         success: false 
       });
     }
 
+    console.log('Signature verified successfully');
+
+    console.log('Signature verified successfully');
+    
     // Payment verified successfully
     // Generate license key
     const licenseKey = generateLicenseKey();
+    console.log('Generated license key:', licenseKey);
 
     // Optional: Store in Supabase for server-side verification
-    try {
-      const supabase = createClient(
-        process.env.VITE_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_KEY // Use service key on server
-      );
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+      try {
+        console.log('Attempting to store in Supabase...');
+        const supabase = createClient(
+          process.env.VITE_SUPABASE_URL,
+          process.env.SUPABASE_SERVICE_KEY
+        );
 
-      await supabase.from('pro_licenses').insert([{
-        license_key: licenseKey,
-        payment_id: razorpay_payment_id,
-        order_id: razorpay_order_id,
-        purchased_at: new Date().toISOString(),
-        is_active: true,
-      }]);
-    } catch (dbError) {
-      // Log but don't fail - client will still get license key
-      console.error('Supabase storage error:', dbError);
+        const { data, error } = await supabase.from('pro_licenses').insert([{
+          license_key: licenseKey,
+          payment_id: razorpay_payment_id,
+          order_id: razorpay_order_id,
+          purchased_at: new Date().toISOString(),
+          is_active: true,
+        }]);
+
+        if (error) {
+          console.error('Supabase insert error:', error);
+        } else {
+          console.log('Supabase insert successful:', data);
+        }
+      } catch (dbError) {
+        // Log but don't fail - client will still get license key
+        console.error('Supabase storage error:', dbError);
+      }
+    } else {
+      console.log('Supabase not configured, skipping storage');
     }
 
     return res.status(200).json({
