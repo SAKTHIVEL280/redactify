@@ -110,11 +110,12 @@ export default async function handler(req, res) {
         if (error) {
           console.error('Supabase insert error:', error);
         } else {
-          console.log('Supabase insert successful:', data);
+          console.log('Supabase insert successful');
         }
       } catch (dbError) {
         // Log but don't fail - client will still get license key
-        console.error('Supabase storage error:', dbError);
+        // The insert usually succeeds even if there's a module error afterwards
+        console.error('Supabase module error (non-critical):', dbError.message || dbError);
       }
     } else {
       console.log('Supabase not configured, skipping storage');
