@@ -3,7 +3,7 @@
 import { checkIndexedDB, localStorageFallback } from './browserCompat';
 
 const DB_NAME = 'ResumeRedactorDB';
-const DB_VERSION = 2; // Must match customRulesDB version
+const DB_VERSION = 3; // Must match customRulesDB version
 const STORE_NAME = 'proLicense';
 const LOCALSTORAGE_KEY = 'redactify_pro_license_encrypted';
 
