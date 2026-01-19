@@ -236,7 +236,7 @@ function App() {
               Privacy
             </button>
 
-            {isPro && currentView === 'redactor' && (
+            {isPro && (
               <>
                 <button
                   onClick={() => setShowBatchProcessor(true)}
