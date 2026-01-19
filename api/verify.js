@@ -6,7 +6,6 @@
  */
 
 import crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
 
 // Generate license key
 function generateLicenseKey() {
@@ -91,6 +90,10 @@ export default async function handler(req, res) {
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
       try {
         console.log('Attempting to store in Supabase...');
+        
+        // Dynamic import for Supabase to avoid ES module issues
+        const { createClient } = await import('@supabase/supabase-js');
+        
         const supabase = createClient(
           process.env.VITE_SUPABASE_URL,
           process.env.SUPABASE_SERVICE_KEY
