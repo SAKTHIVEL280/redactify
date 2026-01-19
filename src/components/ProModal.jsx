@@ -90,11 +90,11 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
     setLoading(true);
     try {
       const supabaseData = {
-        license_key: savedLicenseData.key,
-        payment_id: savedLicenseData.paymentId,
-        order_id: savedLicenseData.orderId,
+        licenseKey: savedLicenseData.key,
+        paymentId: savedLicenseData.paymentId,
+        orderId: savedLicenseData.orderId,
         email: email.trim() || null,
-        purchased_at: savedLicenseData.purchasedAt
+        purchasedAt: savedLicenseData.purchasedAt
       };
       await storeLicenseInSupabase(supabaseData);
       if (onSuccess) onSuccess(savedLicenseData);

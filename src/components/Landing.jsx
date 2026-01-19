@@ -201,19 +201,19 @@ export default function Landing({ onGetStarted, isPro, onNavigate }) {
             </div>
 
             {/* Pro Upgrade */}
-            <div className="md:col-span-7 bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-3xl p-10 group relative overflow-hidden cursor-pointer hover:border-white/30 transition-all duration-500 backdrop-blur-sm" onClick={onGetStarted}>
+            <div className="md:col-span-7 bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-3xl p-10 group relative overflow-hidden cursor-pointer hover:border-white/30 transition-all duration-500 backdrop-blur-sm" onClick={isPro ? onGetStarted : () => onNavigate('upgrade')}>
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
 
               <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                  <div className="inline-block px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-mono text-white uppercase tracking-wider mb-4">Premium</div>
-                  <h3 className="text-3xl font-bold text-white mb-3 tracking-tight">Unlock Pro Features</h3>
+                  <div className="inline-block px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-mono text-white uppercase tracking-wider mb-4">{isPro ? 'Pro Active' : 'Premium'}</div>
+                  <h3 className="text-3xl font-bold text-white mb-3 tracking-tight">{isPro ? 'Start Redacting' : 'Unlock Pro Features'}</h3>
                   <p className="text-zinc-400 text-lg max-w-md">
-                    DOCX & PDF exports, batch processing, and advanced redaction patterns for power users.
+                    {isPro ? 'You have access to DOCX & PDF exports, batch processing, and custom regex rules.' : 'DOCX & PDF exports, batch processing, and advanced redaction patterns for power users.'}
                   </p>
                 </div>
                 <div className="px-8 py-4 bg-white text-black rounded-full font-bold backdrop-blur-sm group-hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] transition-all flex items-center gap-3">
-                  <span>Upgrade Now</span>
+                  <span>{isPro ? 'Redact Now' : 'Upgrade Now'}</span>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
