@@ -34,6 +34,7 @@ function App() {
   const [showRefunds, setShowRefunds] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024); // Start closed on mobile
   const [isPro, setIsPro] = useState(false);
+  const [isProLoading, setIsProLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
 
   // PII state
@@ -89,8 +90,10 @@ function App() {
   // Check Pro status on mount
   useEffect(() => {
     const checkPro = async () => {
+      setIsProLoading(true);
       const isProUser = await verifyProStatus();
       setIsPro(isProUser);
+      setIsProLoading(false);
     };
     checkPro();
   }, []);

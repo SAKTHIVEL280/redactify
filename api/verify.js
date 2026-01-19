@@ -91,31 +91,36 @@ export default async function handler(req, res) {
       try {
         console.log('Attempting to store in Supabase...');
         
-        // Dynamic import for Supabase to avoid ES module issues
-        const { createClient } = await import('@supabase/supabase-js');
+        // Use Supabase REST API directly to avoid ES module issues
+        const supabaseUrl = process.env.VITE_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
         
-        const supabase = createClient(
-          process.env.VITE_SUPABASE_URL,
-          process.env.SUPABASE_SERVICE_KEY
-        );
+        const response = await fetch(`${supabaseUrl}/rest/v1/pro_licenses`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            license_key: licenseKey,
+            payment_id: razorpay_payment_id,
+            order_id: razorpay_order_id,
+            purchased_at: new Date().toISOString(),
+            is_active: true,
+          })
+        });
 
-        const { data, error } = await supabase.from('pro_licenses').insert([{
-          license_key: licenseKey,
-          payment_id: razorpay_payment_id,
-          order_id: razorpay_order_id,
-          purchased_at: new Date().toISOString(),
-          is_active: true,
-        }]);
-
-        if (error) {
-          console.error('Supabase insert error:', error);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Supabase insert error:', response.status, errorText);
         } else {
           console.log('Supabase insert successful');
         }
       } catch (dbError) {
         // Log but don't fail - client will still get license key
-        // The insert usually succeeds even if there's a module error afterwards
-        console.error('Supabase module error (non-critical):', dbError.message || dbError);
+        console.error('Supabase storage error (non-critical):', dbError.message || dbError);
       }
     } else {
       console.log('Supabase not configured, skipping storage');
