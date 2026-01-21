@@ -2,7 +2,7 @@
 import { checkIndexedDB, localStorageFallback } from './browserCompat';
 
 const DB_NAME = 'ResumeRedactorDB';
-const DB_VERSION = 3; // Incremented to ensure fresh store creation
+const DB_VERSION = 4; // Incremented to force customRules store creation
 const CUSTOM_RULES_STORE = 'customRules';
 const LOCALSTORAGE_KEY = 'redactify_custom_rules';
 
