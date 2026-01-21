@@ -2,7 +2,7 @@
 import { checkIndexedDB, localStorageFallback } from './browserCompat';
 
 const DB_NAME = 'ResumeRedactorDB';
-const DB_VERSION = 4; // Incremented to force customRules store creation
+const DB_VERSION = 5; // Incremented to create both stores together
 const CUSTOM_RULES_STORE = 'customRules';
 const LOCALSTORAGE_KEY = 'redactify_custom_rules';
 
@@ -35,10 +35,17 @@ const initDB = async () => {
     
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
+      
+      // Create customRules store
       if (!db.objectStoreNames.contains(CUSTOM_RULES_STORE)) {
         const store = db.createObjectStore(CUSTOM_RULES_STORE, { keyPath: 'id', autoIncrement: true });
         store.createIndex('name', 'name', { unique: false });
         store.createIndex('enabled', 'enabled', { unique: false });
+      }
+      
+      // Also create proLicense store if it doesn't exist (shared database)
+      if (!db.objectStoreNames.contains('proLicense')) {
+        db.createObjectStore('proLicense', { keyPath: 'id' });
       }
     };
   });
