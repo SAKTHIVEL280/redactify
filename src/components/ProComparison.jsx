@@ -64,7 +64,7 @@ const ProComparison = ({ onUpgradeClick }) => {
               <Sparkles className="w-4 h-4 text-red-400" />
               <span className="text-2xl font-bold text-white">Pro</span>
             </div>
-            <div className="text-xs text-zinc-400 font-mono">₹99 lifetime</div>
+            <div className="text-xs text-zinc-400 font-mono">₹1,599 lifetime</div>
           </div>
         </div>
 
