@@ -80,8 +80,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
       if (response.ok) {
         setStatus({ 
           type: 'success', 
-          message: 'Thank you!,
-            honeypot: '' Your feedback has been received. We\'ll review it shortly.' 
+          message: 'Thank you! Your feedback has been received. We\'ll review it shortly.' 
         });
         
         // Reset form

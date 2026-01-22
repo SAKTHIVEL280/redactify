@@ -227,7 +227,6 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
               disabled={loading}
               className="w-full py-5 bg-red-500 text-white font-bold text-lg rounded-full hover:bg-red-600 transition-colors shadow-xl hover:shadow-2xl disabled:opacity-70 disabled:cursor-not-allowed mb-6"
               aria-busy={loading}
-              className="w-full py-5 bg-red-500 text-white font-bold text-lg rounded-full hover:bg-red-600 transition-colors shadow-xl hover:shadow-2xl disabled:opacity-70 disabled:cursor-not-allowed mb-6"
             >
               {loading ? 'Processing...' : 'Get Lifetime Access'}
             </button>
