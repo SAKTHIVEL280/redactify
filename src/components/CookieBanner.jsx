@@ -5,15 +5,14 @@ const CookieBanner = () => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const savedPreferences = localStorage.getItem('cookie_preferences');
-    if (!savedPreferences) {
+    const cookieConsent = localStorage.getItem('cookieConsent');
+    if (cookieConsent !== 'accepted') {
       setIsVisible(true);
     }
   }, []);
 
   const handleAccept = () => {
-    const allAccepted = { necessary: true, analytics: true };
-    localStorage.setItem('cookie_preferences', JSON.stringify(allAccepted));
+    localStorage.setItem('cookieConsent', 'accepted');
     setIsVisible(false);
   };
 

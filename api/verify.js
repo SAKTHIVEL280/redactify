@@ -7,6 +7,32 @@
 
 import crypto from 'crypto';
 
+// Simple rate limiting (in-memory)
+const rateLimitStore = {};
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const MAX_REQUESTS = 10; // 10 verification attempts per minute per IP
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  
+  if (!rateLimitStore[ip]) {
+    rateLimitStore[ip] = { count: 1, resetTime: now + RATE_LIMIT_WINDOW };
+    return { allowed: true, remaining: MAX_REQUESTS - 1 };
+  }
+
+  if (now > rateLimitStore[ip].resetTime) {
+    rateLimitStore[ip] = { count: 1, resetTime: now + RATE_LIMIT_WINDOW };
+    return { allowed: true, remaining: MAX_REQUESTS - 1 };
+  }
+
+  if (rateLimitStore[ip].count >= MAX_REQUESTS) {
+    return { allowed: false, remaining: 0, resetTime: rateLimitStore[ip].resetTime };
+  }
+
+  rateLimitStore[ip].count++;
+  return { allowed: true, remaining: MAX_REQUESTS - rateLimitStore[ip].count };
+}
+
 // Generate license key
 function generateLicenseKey() {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -30,6 +56,23 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Rate limiting
+  const ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown';
+  const rateLimit = checkRateLimit(ip);
+  
+  res.setHeader('X-RateLimit-Limit', MAX_REQUESTS);
+  res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
+
+  if (!rateLimit.allowed) {
+    const resetIn = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
+    res.setHeader('X-RateLimit-Reset', rateLimit.resetTime);
+    return res.status(429).json({ 
+      error: 'Too many verification attempts', 
+      message: `Please try again in ${resetIn} seconds`,
+      success: false 
+    });
   }
 
   try {

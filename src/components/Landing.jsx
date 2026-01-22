@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
 import PrivacyModal from './PrivacyModal';
+import ProComparison from './ProComparison';
 
 export default function Landing({ onGetStarted, isPro, onNavigate }) {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -449,6 +450,13 @@ export default function Landing({ onGetStarted, isPro, onNavigate }) {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5">
+        {/* Pro Comparison Section - Only show to Free users */}
+        {!isPro && (
+          <section className="py-24 px-6" id="pricing">
+            <ProComparison onUpgradeClick={() => onNavigate('upgrade')} />
+          </section>
+        )}
+
         <div className="max-w-7xl mx-auto px-6 py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             {/* Brand */}

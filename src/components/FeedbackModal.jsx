@@ -12,7 +12,8 @@ export default function FeedbackModal({ isOpen, onClose }) {
     email: '',
     subject: '',
     message: '',
-    attachmentType: '' // If PII was missed, what type?
+    attachmentType: '', // If PII was missed, what type?
+    honeypot: '' // Honeypot field
   });
   
   const [status, setStatus] = useState({ type: '', message: '' }); // success, error, loading
@@ -29,6 +30,16 @@ export default function FeedbackModal({ isOpen, onClose }) {
     e.preventDefault();
     setIsSubmitting(true);
     setStatus({ type: '', message: '' });
+
+    // Honeypot check - if filled, it's a bot
+    if (formData.honeypot) {
+      // Silently reject without showing error
+      setTimeout(() => {
+        setStatus({ type: 'success', message: 'Thank you for your feedback!' });
+        onClose();
+      }, 2000);
+      return;
+    }
 
     // Validation
     if (!formData.message.trim()) {
@@ -58,7 +69,8 @@ export default function FeedbackModal({ isOpen, onClose }) {
       if (response.ok) {
         setStatus({ 
           type: 'success', 
-          message: 'Thank you! Your feedback has been received. We\'ll review it shortly.' 
+          message: 'Thank you!,
+            honeypot: '' Your feedback has been received. We\'ll review it shortly.' 
         });
         
         // Reset form
@@ -156,6 +168,18 @@ export default function FeedbackModal({ isOpen, onClose }) {
               className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
             />
           </div>
+
+          {/* Honeypot field - hidden from users */}
+          <input
+            type="text"
+            name="website"
+            value={formData.honeypot}
+            onChange={(e) => setFormData({ ...formData, honeypot: e.target.value })}
+            style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
+            tabIndex="-1"
+            autoComplete="off"
+            aria-hidden="true"
+          />
 
           {/* Subject */}
           <div>
