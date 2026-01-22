@@ -158,7 +158,7 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto" role="dialog" aria-labelledby="pro-modal-title" aria-modal="true">
-      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto flex flex-col md:flex-row border border-zinc-800"
+      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto flex flex-col md:flex-row border border-zinc-800">
         
         {/* Left: Value Prop */}
         <div className="md:w-1/2 bg-zinc-900/50 p-6 md:p-10 border-r border-zinc-800 flex flex-col justify-between overflow-y-auto">
