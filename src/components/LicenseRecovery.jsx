@@ -11,6 +11,17 @@ const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
 
+  // ESC key to close modal
+  React.useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && isOpen && !loading) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, loading, onClose]);
+
   const handleSendCode = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -118,12 +129,12 @@ const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto" role="dialog" aria-labelledby="recovery-title" aria-modal="true">
       <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] border border-zinc-800 overflow-hidden flex flex-col my-auto">
         <div className="p-8 overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold text-white tracking-tight">Recover License</h2>
-            <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors">
+            <h2 id="recovery-title" className="text-2xl font-bold text-white tracking-tight">Recover License</h2>
+            <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors" aria-label="Close license recovery modal">
               <X className="w-5 h-5" />
             </button>
           </div>

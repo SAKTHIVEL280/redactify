@@ -16,6 +16,17 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
   const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || 'rzp_test_XXXXX';
   const PRICE = 159900; // ₹1,599 in paise
 
+  // ESC key to close modal
+  React.useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && isOpen && !loading) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, loading, onClose]);
+
   const handlePayment = async () => {
     setLoading(true);
     setError(null);
@@ -104,13 +115,13 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
 
   if (showEmailPrompt) {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto" role="dialog" aria-labelledby="email-prompt-title" aria-modal="true">
         <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] border border-zinc-800 overflow-hidden my-auto">
           <div className="p-8 text-center overflow-y-auto">
             <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <Check className="w-8 h-8 text-green-400" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">You're all set!</h2>
+            <h2 id="email-prompt-title" className="text-2xl font-bold text-white mb-2">You're all set!</h2>
             <p className="text-zinc-400 mb-8">Your Pro license has been activated.</p>
             
             <div className="text-left mb-6">
@@ -146,7 +157,7 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 overflow-y-auto" role="dialog" aria-labelledby="pro-modal-title" aria-modal="true">
       <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto flex flex-col md:flex-row border border-zinc-800"
         
         {/* Left: Value Prop */}
@@ -155,7 +166,7 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
             <div className="inline-block px-3 py-1 rounded-full bg-red-500 text-white text-xs font-bold uppercase tracking-wider mb-8">
               Pro Access
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight leading-[0.95]">
+            <h2 id="pro-modal-title" className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight leading-[0.95]">
               Professional <br/> Power.
             </h2>
             <p className="text-lg text-zinc-400 leading-relaxed mb-12">
@@ -186,6 +197,7 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
           <button
             onClick={onClose}
             className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-white rounded-full transition-colors"
+            aria-label="Close payment modal"
           >
             <X className="w-5 h-5" />
           </button>
@@ -197,15 +209,23 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
               <div className="text-zinc-400">Lifetime access. No subscriptions.</div>
             </div>
 
-            {error && (
-              <div className="mb-6 p-4 bg-red-500/20 text-red-400 border border-red-500/30 text-sm rounded-xl text-center">
+            {error && ( role="alert">
                 {error}
+                <button 
+                  onClick={() => setError(null)} 
+                  className="ml-2 underline hover:no-underline"
+                  aria-label="Dismiss error"
+                >
+                  Dismiss
+                </button>
               </div>
             )}
 
             <button
               onClick={handlePayment}
               disabled={loading}
+              className="w-full py-5 bg-red-500 text-white font-bold text-lg rounded-full hover:bg-red-600 transition-colors shadow-xl hover:shadow-2xl disabled:opacity-70 disabled:cursor-not-allowed mb-6"
+              aria-busy={loading}
               className="w-full py-5 bg-red-500 text-white font-bold text-lg rounded-full hover:bg-red-600 transition-colors shadow-xl hover:shadow-2xl disabled:opacity-70 disabled:cursor-not-allowed mb-6"
             >
               {loading ? 'Processing...' : 'Get Lifetime Access'}
