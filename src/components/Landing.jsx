@@ -487,9 +487,9 @@ export default function Landing({ onGetStarted, isPro, onNavigate }) {
             <div>
               <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Connect</h3>
               <ul className="space-y-2">
-                <li><a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-white transition-colors">GitHub</a></li>
-                <li><a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-white transition-colors">Twitter</a></li>
-                <li><a href="mailto:hello@redactify.com" className="text-sm text-zinc-500 hover:text-white transition-colors">Contact</a></li>
+                <li><a href="https://github.com/sakthivel280" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-white transition-colors">GitHub</a></li>
+                <li><a href="https://x.com/SAKTHIVEL_E_" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-white transition-colors">X (Twitter)</a></li>
+                <li><a href="https://www.linkedin.com/in/sakthivel-e-1924a0292/" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-500 hover:text-white transition-colors">LinkedIn</a></li>
               </ul>
             </div>
           </div>
@@ -503,7 +503,6 @@ export default function Landing({ onGetStarted, isPro, onNavigate }) {
               <div className="flex items-center gap-6">
                 <span className="text-xs text-zinc-600 font-mono">100% Browser-Based</span>
                 <span className="text-xs text-zinc-600 font-mono">Zero Data Collection</span>
-                <span className="text-xs text-zinc-600 font-mono">Open Source</span>
               </div>
             </div>
           </div>

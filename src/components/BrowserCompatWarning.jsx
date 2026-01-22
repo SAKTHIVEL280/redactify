@@ -15,9 +15,6 @@ export default function BrowserCompatWarning() {
         setWarnings(compat.warnings);
         setErrors(compat.issues);
         setShowBanner(true);
-        
-        // Log to console for debugging
-        console.log('Browser Compatibility Check:', compat);
       }
     };
 

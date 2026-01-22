@@ -43,10 +43,10 @@ export default function Contact({ onClose }) {
                     For technical support, Pro license issues, or general inquiries
                   </p>
                   <a 
-                    href="mailto:support@redactify.daeq.in"
+                    href="mailto:sakthivel.b3p@gmail.com"
                     className="text-blue-400 hover:text-blue-300 transition-colors font-mono text-sm"
                   >
-                    support@redactify.daeq.in
+                    sakthivel.b3p@gmail.com
                   </a>
                 </div>
               </div>
