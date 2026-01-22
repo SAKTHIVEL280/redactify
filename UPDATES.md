@@ -5,9 +5,9 @@
 ### 🔒 Critical Security Fixes
 1. **Email Verification for License Recovery** ✅
    - Added verification code system to prevent license theft
-   - 6-digit codes sent via email (Brevo integration)
+   - 6-digit codes sent via email (uses existing Resend setup)
    - 10-minute expiration for codes
-   - See [EMAIL_SETUP.md](EMAIL_SETUP.md) for configuration
+   - No additional setup needed - uses same Resend API key as feedback
 
 2. **API Rate Limiting** ✅
    - `/api/create-order`: 5 requests/minute per IP
@@ -56,7 +56,7 @@
 ## 📋 To Do
 
 ### High Priority
-- [ ] **Test Email Service**: Set up Brevo account and test verification emails
+- [ ] **Test Email Verification**: Test license recovery with email verification codes
 - [ ] **Switch to Live Razorpay Keys**: When ready for public launch
 - [ ] **Final SEO**: Meta tags, Open Graph, Twitter Cards
 
@@ -72,15 +72,14 @@
 ## 🚀 Deployment Checklist
 
 Before going public:
-1. ✅ Email verification working
+1. ✅ Email verification working (uses Resend - already configured)
 2. ✅ Rate limiting active
 3. ✅ All security features tested
-4. ⏳ Set `BREVO_API_KEY` in Vercel (see EMAIL_SETUP.md)
+4. ⏳ Test license recovery end-to-end with email codes
 5. ⏳ Switch Razorpay keys to live in Vercel env vars
 6. ⏳ Test payment flow end-to-end
-7. ⏳ Test license recovery with email verification
-8. ⏳ Final SEO check
-9. ⏳ Announce on X, LinkedIn
+7. ⏳ Final SEO check
+8. ⏳ Announce on X, LinkedIn
 
 ## 🔐 Environment Variables Required
 
@@ -95,7 +94,8 @@ VITE_SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_KEY=your_service_role_key
 
 # Email (Brevo)
-BREVO_API_KEY=your_brevo_api_key
+BREVO_APIResend - already configured)
+RESEND_API_KEY=re_xxxxxxxxx  # ✅ Already set
 ```
 
 ### Local Development
@@ -108,9 +108,8 @@ RAZORPAY_KEY_SECRET=your_test_secret
 VITE_SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_KEY=your_service_role_key
 
-# Email (optional in dev - codes logged to console)
-BREVO_API_KEY=your_brevo_api_key
-```
+# Email (Resend - already configured)
+RESEND_API_KEY=re_xxxxxxxxx  # ✅ Already set
 
 ## 🐛 Known Issues
 None currently! All 25 issues from testing have been addressed.
