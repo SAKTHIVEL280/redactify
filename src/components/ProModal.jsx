@@ -209,7 +209,8 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
               <div className="text-zinc-400">Lifetime access. No subscriptions.</div>
             </div>
 
-            {error && ( role="alert">
+            {error && (
+              <div className="mb-6 p-4 bg-red-500/20 text-red-400 border border-red-500/30 text-sm rounded-xl text-center" role="alert">
                 {error}
                 <button 
                   onClick={() => setError(null)} 
