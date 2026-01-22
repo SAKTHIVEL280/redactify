@@ -140,6 +140,3 @@ const ProComparison = ({ onUpgradeClick }) => {
 };
 
 export default ProComparison;
-};
-
-export default ProComparison;
