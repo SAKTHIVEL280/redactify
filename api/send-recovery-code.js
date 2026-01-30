@@ -2,6 +2,28 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Supabase REST API helper
+async function supabaseQuery(endpoint, method = 'GET', body = null) {
+  const url = `${process.env.VITE_SUPABASE_URL}/rest/v1/${endpoint}`;
+  const options = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': process.env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+      'Prefer': 'return=representation'
+    }
+  };
+  
+  if (body) options.body = JSON.stringify(body);
+  
+  const response = await fetch(url, options);
+  const data = await response.json();
+  
+  if (!response.ok) throw new Error(data.message || 'Supabase error');
+  return data;
+}
+
 export default async function handler(req, res) {
   // Only allow POST
   if (req.method !== 'POST') {
@@ -15,15 +37,34 @@ export default async function handler(req, res) {
   }
 
   try {
+    const emailLower = email.toLowerCase().trim();
+    
+    // Check rate limiting - max 3 codes per email per 15 minutes
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const recentCodes = await supabaseQuery(
+      `verification_codes?email=eq.${encodeURIComponent(emailLower)}&created_at=gte.${fifteenMinutesAgo}&select=count`,
+      'GET'
+    );
+    
+    if (recentCodes && recentCodes.length > 0 && recentCodes[0].count >= 3) {
+      return res.status(429).json({ 
+        error: 'Too many requests',
+        message: 'Please wait 15 minutes before requesting a new code' 
+      });
+    }
+
     // Generate 6-digit code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     
-    // Store code in memory (expires in 10 minutes)
-    global.verificationCodes = global.verificationCodes || {};
-    global.verificationCodes[email.toLowerCase()] = {
+    // Store code in Supabase
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+    await supabaseQuery('verification_codes', 'POST', {
+      email: emailLower,
       code: verificationCode,
-      expires: Date.now() + 10 * 60 * 1000, // 10 minutes
-    };
+      expires_at: expiresAt,
+      verified: false,
+      attempts: 0
+    });
 
     // Send email via Resend
     await resend.emails.send({
