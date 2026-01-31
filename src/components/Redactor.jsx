@@ -1,11 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { X, RefreshCw, Sparkles, Download, AlertCircle, CheckCircle } from 'lucide-react';
 import PropTypes from 'prop-types';
-import { detectPII, extractTextFromInput, highlightPII } from '../utils/piiDetector';
-import { usePIIDetection } from '../hooks/usePIIDetection';
+import { extractTextFromInput, highlightPII } from '../utils/piiDetector';
 import { useTransformersPII } from '../hooks/useTransformersPII';
-import { detectPIIHybrid } from '../utils/hybridDetection';
-import { getEnabledCustomRules } from '../utils/customRulesDB';
+import { getEnabledCustomRules, applyCustomRules } from '../utils/customRulesDB';
 import { getFileTypeFromMime } from '../utils/fileHelpers';
 import { showError, showSuccess, showWarning } from '../utils/toast';
 import { getFileSizeLimits } from '../utils/browserCompat';
@@ -21,13 +19,9 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
   const [fileType, setFileType] = useState(null);
   const [showModelNotice, setShowModelNotice] = useState(false);
   const [modelCached, setModelCached] = useState(false);
-  const [userWantsAI, setUserWantsAI] = useState(true); // Default to AI enabled
   const abortControllerRef = React.useRef(null);
-
-  // Use Web Worker hook for heavy processing (optional - falls back to main thread)
-  const { detect } = usePIIDetection();
   
-  // Use Transformers.js ML model for advanced PII detection
+  // Use Transformers.js ML model for PII detection (context-aware)
   const { 
     detectPII: detectWithML, 
     isModelLoading, 
@@ -83,7 +77,12 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
           if (text && text.trim().length > 10) {
             setIsProcessing(true);
             try {
-              const detected = await detect(text, rules);
+              // Get ML detections
+              const mlDetections = await detectWithML(text);
+              // Apply custom rules
+              const customDetections = applyCustomRules(text, rules);
+              // Merge results
+              const detected = [...mlDetections, ...customDetections];
               onPIIDetected(detected, text, uploadedFile, fileType);
             } catch (err) {
               showError('Error re-analyzing with updated rules');
@@ -123,25 +122,27 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
 
     if (newText.trim().length > 10) {
       setIsProcessing(true);
-      // Debounce detection for performance (real-time but not on every keystroke)
+      // Debounce detection for performance
       setTimeout(async () => {
         try {
-          // Use hybrid detection (AI + regex) if user wants AI, otherwise regex-only
-          let detected;
-          if (userWantsAI && !modelError) {
-            detected = await detectPIIHybrid(newText, detectWithML, customRules, true);
-          } else {
-            // Use regex-only if user opted out or model fails to load
-            detected = await detect(newText, customRules);
-          }
+          // Use ML model for context-aware detection
+          const mlDetections = await detectWithML(newText);
+          // Apply custom rules if Pro user
+          const customDetections = customRules.length > 0 ? applyCustomRules(newText, customRules) : [];
+          // Merge results
+          const detected = [...mlDetections, ...customDetections];
           onPIIDetected(detected, newText);
         } catch (err) {
-          setError('Error detecting PII: ' + err.message);
+          if (modelError) {
+            showError('ML model failed to load. Please refresh the page.');
+          } else {
+            setError('Error detecting PII: ' + err.message);
+          }
           onPIIDetected([], newText);
         } finally {
           setIsProcessing(false);
         }
-      }, 500);
+      }, 800);
     } else {
       onPIIDetected([], newText);
       setIsProcessing(false);
@@ -197,13 +198,10 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       
       setText(content);
 
-      // Use hybrid detection (AI + regex) if user wants AI, otherwise regex-only
-      let detected;
-      if (userWantsAI && !modelError) {
-        detected = await detectPIIHybrid(content, detectWithML, customRules, true);
-      } else {
-        detected = await detect(content, customRules);
-      }
+      // Use ML model detection with custom rules
+      const mlDetections = await detectWithML(content);
+      const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
+      const detected = [...mlDetections, ...customDetections];
       
       // Check if aborted
       if (signal.aborted) return;
@@ -220,7 +218,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
         setIsProcessing(false);
       }
     }
-  }, [onPIIDetected, detect, customRules, modelError, detectWithML, userWantsAI]);
+  }, [onPIIDetected, customRules, detectWithML]);
 
   // Handle file input with file extraction
   const handleFileInput = useCallback(async (e) => {
@@ -260,13 +258,10 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       
       setText(content);
 
-      // Use hybrid detection (AI + regex) if user wants AI, otherwise regex-only
-      let detected;
-      if (userWantsAI && !modelError) {
-        detected = await detectPIIHybrid(content, detectWithML, customRules, true);
-      } else {
-        detected = await detect(content, customRules);
-      }
+      // Use ML model detection with custom rules
+      const mlDetections = await detectWithML(content);
+      const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
+      const detected = [...mlDetections, ...customDetections];
       
       // Check if aborted
       if (signal.aborted) return;
@@ -283,7 +278,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
         setIsProcessing(false);
       }
     }
-  }, [detect, customRules, onPIIDetected, modelError, detectWithML, userWantsAI]);
+  }, [customRules, onPIIDetected, detectWithML]);
 
   // Sample resume text
   const loadSampleResume = useCallback(async () => {
@@ -323,13 +318,10 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
     
     try {
       setIsProcessing(true);
-      // Use hybrid detection (AI + regex) if user wants AI, otherwise regex-only
-      let detected;
-      if (userWantsAI && !modelError) {
-        detected = await detectPIIHybrid(sample, detectWithML, customRules, true);
-      } else {
-        detected = await detect(sample, customRules);
-      }
+      // Use ML model detection with custom rules
+      const mlDetections = await detectWithML(sample);
+      const customDetections = customRules.length > 0 ? applyCustomRules(sample, customRules) : [];
+      const detected = [...mlDetections, ...customDetections];
       onPIIDetected(detected, sample, null, 'txt');
     } catch (err) {
       showError('Error detecting PII in sample resume');
@@ -337,7 +329,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
     } finally {
       setIsProcessing(false);
     }
-  }, [detect, customRules, onPIIDetected, modelError, detectWithML]);
+  }, [customRules, onPIIDetected, detectWithML]);
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
@@ -380,24 +372,12 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
               <button
                 onClick={() => {
                   setShowModelNotice(false);
-                  setUserWantsAI(true);
                   localStorage.setItem('modelNoticeDismissed', 'true');
                   showSuccess('AI detection enabled. Upload a document to begin.');
                 }}
-                className="flex-1 px-4 py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-200 transition-all"
+                className="w-full px-4 py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-200 transition-all"
               >
-                Continue with AI
-              </button>
-              <button
-                onClick={() => {
-                  setShowModelNotice(false);
-                  setUserWantsAI(false);
-                  localStorage.setItem('modelNoticeDismissed', 'true');
-                  showSuccess('Using regex-only mode. Upload a document to begin.');
-                }}
-                className="px-4 py-3 bg-zinc-800 text-white font-medium rounded-xl hover:bg-zinc-700 transition-all border border-white/10"
-              >
-                Use Regex Only
+                Continue
               </button>
             </div>
 

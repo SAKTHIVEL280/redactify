@@ -222,3 +222,43 @@ export const toggleCustomRule = async (id) => {
     return { success: false, error: error.message };
   }
 };
+
+/**
+ * Apply custom regex rules to text and return detected PII
+ * @param {string} text - Text to analyze
+ * @param {Array} rules - Array of custom rules
+ * @returns {Array} Array of detected PII items matching custom rules
+ */
+export const applyCustomRules = (text, rules) => {
+  if (!text || !rules || rules.length === 0) {
+    return [];
+  }
+
+  const detected = [];
+  let idCounter = Date.now();
+
+  rules.forEach(rule => {
+    try {
+      // Create regex from pattern
+      const regex = new RegExp(rule.pattern, 'gi');
+      let match;
+
+      while ((match = regex.exec(text)) !== null) {
+        detected.push({
+          id: `custom-${idCounter++}`,
+          type: 'custom',
+          value: match[0],
+          suggested: rule.replacement || '[REDACTED]',
+          start: match.index,
+          end: match.index + match[0].length,
+          redact: true,
+          customRuleName: rule.name
+        });
+      }
+    } catch (error) {
+      console.error(`Error applying custom rule "${rule.name}":`, error);
+    }
+  });
+
+  return detected;
+};
