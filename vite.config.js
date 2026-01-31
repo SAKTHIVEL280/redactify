@@ -41,11 +41,11 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api/]
       },
       manifest: {
-        name: 'Resume Redactor - Privacy-First Document Anonymizer',
-        short_name: 'Resume Redactor',
+        name: 'Redactify - Privacy-First Document Anonymizer',
+        short_name: 'Redactify',
         description: 'Anonymize resumes and documents entirely in your browser. Zero uploads, 100% private.',
-        theme_color: '#3b82f6',
-        background_color: '#ffffff',
+        theme_color: '#ef4444',
+        background_color: '#000000',
         display: 'standalone',
         start_url: '/',
         scope: '/',

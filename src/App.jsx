@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Moon, Sun, Menu, X } from 'lucide-react';
+import { Menu, X, Zap } from 'lucide-react';
 import Landing from './components/Landing';
 import Redactor from './components/Redactor';
 import Sidebar from './components/Sidebar';
@@ -280,9 +280,10 @@ function App() {
                 Upgrade
               </button>
             ) : (
-              <span className="text-xs font-bold px-2 py-1 bg-zinc-800 rounded text-white uppercase tracking-wider">
-                PRO
-              </span>
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30 rounded-full backdrop-blur-sm" title="All Pro features unlocked">
+                <Zap className="w-3.5 h-3.5 text-red-400" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">PRO</span>
+              </div>
             )}
 
             {/* Mobile: Single Menu Button for both Sidebar and Navigation */}

@@ -10,6 +10,7 @@ export default function BatchProcessor({ isOpen, onClose }) {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [reviewingFile, setReviewingFile] = useState(null); // File being reviewed
+  const [showClearConfirm, setShowClearConfirm] = useState(false); // Confirmation modal
 
   const handleFileSelect = useCallback((e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -123,10 +124,13 @@ export default function BatchProcessor({ isOpen, onClose }) {
   };
 
   const clearAll = () => {
-    if (confirm('Remove all files?')) {
-      setFiles([]);
-      setProgress({ current: 0, total: 0 });
-    }
+    setShowClearConfirm(true);
+  };
+
+  const confirmClearAll = () => {
+    setFiles([]);
+    setProgress({ current: 0, total: 0 });
+    setShowClearConfirm(false);
   };
 
   const handleTogglePII = (fileId, piiId) => {
@@ -161,6 +165,17 @@ export default function BatchProcessor({ isOpen, onClose }) {
   const closeFileReview = () => {
     setReviewingFile(null);
   };
+
+  // ESC key handler for review modal
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && reviewingFile) {
+        closeFileReview();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [reviewingFile]);
 
   const getHighlightedText = (file) => {
     if (!file || !file.originalText) return '';
@@ -478,6 +493,37 @@ export default function BatchProcessor({ isOpen, onClose }) {
               >
                 Done Reviewing
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[60] p-4">
+          <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full border border-white/10 overflow-hidden">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-3">Remove All Files?</h3>
+              <p className="text-zinc-400 mb-8">
+                This will remove all {files.length} file{files.length !== 1 ? 's' : ''} from the batch processor. This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="flex-1 px-6 py-3 bg-zinc-800 text-white rounded-xl font-bold hover:bg-zinc-700 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmClearAll}
+                  className="flex-1 px-6 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all"
+                >
+                  Remove All
+                </button>
+              </div>
             </div>
           </div>
         </div>

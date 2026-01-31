@@ -10,6 +10,10 @@ export default function MobileMenu({ isOpen, onClose, currentView, isPro, onNavi
     ] : [
       { icon: Shield, label: 'Redact', action: 'redact' }
     ]),
+    ...(isPro ? [
+      { icon: Layers, label: 'Batch Processing', action: 'batch', proBadge: true },
+      { icon: Zap, label: 'Custom Rules', action: 'rules', proBadge: true }
+    ] : []),
     { icon: Shield, label: 'Privacy', action: 'privacy' },
     { icon: MessageSquare, label: 'Feedback', action: 'feedback' },
     ...(!isPro ? [
@@ -50,7 +54,10 @@ export default function MobileMenu({ isOpen, onClose, currentView, isPro, onNavi
               className="w-full flex items-center gap-3 px-4 py-3 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-lg transition-all group"
             >
               <item.icon className="w-5 h-5 text-zinc-500 group-hover:text-red-500 transition-colors" />
-              <span className="font-medium">{item.label}</span>
+              <span className="font-medium flex-1 text-left">{item.label}</span>
+              {item.proBadge && (
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-red-500/20 text-red-400 rounded uppercase tracking-wider">Pro</span>
+              )}
             </button>
           ))}
         </div>

@@ -8,12 +8,20 @@ const CookieBanner = () => {
     const cookieConsent = localStorage.getItem('cookieConsent');
     if (cookieConsent !== 'accepted') {
       setIsVisible(true);
+      // Add bottom padding on mobile to prevent blocking content
+      if (window.innerWidth < 768) {
+        document.body.style.paddingBottom = '140px';
+      }
     }
+    return () => {
+      document.body.style.paddingBottom = '0';
+    };
   }, []);
 
   const handleAccept = () => {
     localStorage.setItem('cookieConsent', 'accepted');
     setIsVisible(false);
+    document.body.style.paddingBottom = '0';
   };
 
   if (!isVisible) return null;

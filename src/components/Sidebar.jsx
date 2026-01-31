@@ -179,25 +179,27 @@ function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploaded
             <button
               onClick={handleExportDOCX}
               disabled={exporting || stats.accepted === 0}
+              title={isPro ? "Export as Word document" : "Upgrade to Pro to export as Word"}
               className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center justify-center gap-0.5 border ${isPro
                 ? 'bg-white text-black border-transparent hover:bg-zinc-200 shadow-lg'
                 : 'bg-zinc-900/80 text-zinc-600 border-white/10 hover:border-white/20'
-                }`}
+                } ${exporting ? 'opacity-70 cursor-wait' : ''}`}
             >
-              <span>Word</span>
-              {!isPro && <span className="text-[8px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
+              {exporting ? <span className="text-[10px]">Exporting...</span> : <span>Word</span>}
+              {!isPro && !exporting && <span className="text-[8px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
             </button>
 
             <button
               onClick={handleExportPDF}
               disabled={exporting || stats.accepted === 0}
+              title={isPro ? "Export as PDF" : "Upgrade to Pro to export as PDF"}
               className={`px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center justify-center gap-0.5 border ${isPro
                 ? 'bg-white text-black border-transparent hover:bg-zinc-200 shadow-lg'
                 : 'bg-zinc-900/80 text-zinc-600 border-white/10 hover:border-white/20'
-                }`}
+                } ${exporting ? 'opacity-70 cursor-wait' : ''}`}
             >
-              <span>PDF</span>
-              {!isPro && <span className="text-[8px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
+              {exporting ? <span className="text-[10px]">Exporting...</span> : <span>PDF</span>}
+              {!isPro && !exporting && <span className="text-[8px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
             </button>
           </div>
         </div>
