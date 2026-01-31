@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { X, Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, ChevronRight } from 'lucide-react';
 import { detectPII, extractTextFromInput, replacePII, highlightPII, PII_COLORS } from '../utils/piiDetector';
 import { getEnabledCustomRules } from '../utils/customRulesDB';
