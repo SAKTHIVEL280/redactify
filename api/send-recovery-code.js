@@ -39,6 +39,19 @@ export default async function handler(req, res) {
   try {
     const emailLower = email.toLowerCase().trim();
     
+    // Check if email has any Pro licenses
+    const licenses = await supabaseQuery(
+      `pro_licenses?email=eq.${encodeURIComponent(emailLower)}&is_active=eq.true&select=license_key`,
+      'GET'
+    );
+    
+    if (!licenses || licenses.length === 0) {
+      return res.status(404).json({ 
+        error: 'No Pro subscription found',
+        message: 'This email has no active Pro subscription' 
+      });
+    }
+    
     // Check rate limiting - max 3 codes per email per 15 minutes
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const recentCodes = await supabaseQuery(
