@@ -21,19 +21,9 @@ export default function Landing({ onGetStarted, isPro, onNavigate }) {
 
   return (
     <div className="min-h-screen bg-black text-zinc-300 font-sans antialiased overflow-x-hidden selection:bg-red-500 selection:text-white">
-      {/* Hero Video Background */}
+      {/* Background Gradient */}
       <div className="fixed inset-0 z-0 overflow-hidden">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-50"
-        >
-          <source src="/hero-video.webm" type="video/webm" />
-        </video>
-        {/* Video Overlay for better text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black via-zinc-900 to-black" />
       </div>
 
       {/* Noise Overlay */}
