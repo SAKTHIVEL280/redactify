@@ -280,13 +280,19 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       let mlDetections = [];
       if (detectWithML && !modelError) {
         try {
+          console.log('[DEBUG] Calling ML model for detection...');
           mlDetections = await detectWithML(content);
+          console.log('[DEBUG] ML detections:', mlDetections.length, 'items found');
         } catch (err) {
-          console.warn('ML detection failed:', err.message);
+          console.error('[ERROR] ML detection failed:', err.message);
         }
+      } else {
+        console.warn('[WARN] ML detection skipped - detectWithML:', !!detectWithML, 'modelError:', modelError);
       }
       const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
+      console.log('[DEBUG] Custom detections:', customDetections.length, 'items found');
       const detected = [...mlDetections, ...customDetections];
+      console.log('[DEBUG] Total detections:', detected.length, 'items');
       
       // Check if aborted
       if (signal.aborted) return;
