@@ -361,46 +361,37 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
-      {/* AI Model Loading Overlay - App Store Style */}
+      {/* AI Model Loading Overlay - Matches Dark Theme */}
       {isModelLoading && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-white/10 rounded-2xl max-w-md w-full p-8 shadow-2xl">
-            <div className="flex flex-col items-center text-center">
-              {/* Animated Icon */}
-              <div className="relative w-20 h-20 mb-6">
-                <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping"></div>
-                <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <Download className="w-10 h-10 text-white animate-bounce" />
+        <div className="fixed inset-0 bg-black/98 z-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full">
+            {/* Animated Icon */}
+            <div className="flex justify-center mb-8">
+              <div className="relative">
+                <div className="absolute inset-0 bg-white/5 rounded-full blur-2xl animate-pulse"></div>
+                <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/10 flex items-center justify-center">
+                  <Download className="w-12 h-12 text-white/90 animate-bounce" />
                 </div>
               </div>
-              
-              {/* Title */}
-              <h3 className="text-2xl font-bold text-white mb-2">Downloading AI Model</h3>
-              <p className="text-sm text-zinc-400 mb-6">
-                GLiNER-PII: Advanced edge AI for 60+ PII categories
-              </p>
-              
-              {/* Progress Bar */}
-              <div className="w-full space-y-2">
-                <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 transition-all duration-300 ease-out animate-shimmer"
-                    style={{ 
-                      width: `${modelProgress}%`,
-                      backgroundSize: '200% 100%'
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between items-center">
-                  <p className="text-xs text-zinc-500 font-mono">{Math.round(modelProgress)}%</p>
-                  <p className="text-xs text-zinc-500">~20MB</p>
-                </div>
+            </div>
+            
+            {/* Title */}
+            <h3 className="text-2xl font-bold text-white text-center mb-3">Downloading AI Model</h3>
+            <p className="text-sm text-zinc-400 text-center mb-8">
+              This happens once • ~8MB model will be cached locally
+            </p>
+            
+            {/* Progress Bar - Matching existing design */}
+            <div className="space-y-3">
+              <div className="relative h-2 bg-zinc-900 rounded-full overflow-hidden border border-white/5">
+                <div 
+                  className="absolute inset-0 h-full bg-gradient-to-r from-zinc-700 to-zinc-600 transition-all duration-300 ease-out"
+                  style={{ width: `${modelProgress}%` }}
+                />
               </div>
-              
-              {/* Info */}
-              <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
-                <AlertCircle className="w-3 h-3" />
-                <span>Requires internet connection for first download</span>
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-zinc-500 font-mono">{Math.round(modelProgress)}%</p>
+                <p className="text-xs text-zinc-500">Initializing...</p>
               </div>
             </div>
           </div>

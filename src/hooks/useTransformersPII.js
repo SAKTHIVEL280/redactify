@@ -1,17 +1,12 @@
 /**
- * Advanced PII Detection Hook using GLiNER-PII
- * Uses knowledgator/gliner-pii-edge-v1.0 for Named Entity Recognition
- * Features:
- * - Edge-optimized GLiNER model (~20-40MB)
- * - Zero-shot: Detects 60+ PII categories
- * - Cache API for model persistence
- * - Web Worker for non-blocking inference
- * - Detects: Names, Emails, Phones, SSN, Addresses, and much more
+ * PII Detection Hook using Transformers.js
+ * Uses Xenova/bert-base-NER for Named Entity Recognition
+ * Combined with regex patterns for comprehensive coverage
  */
 
 import { useCallback, useRef, useEffect, useState } from 'react';
 
-const MODEL_NAME = 'knowledgator/gliner-pii-edge-v1.0';
+const MODEL_NAME = 'Xenova/bert-base-NER';
 const CACHE_NAME = 'transformers-models-cache';
 const MODEL_CACHE_KEY = `${MODEL_NAME}-v1`;
 

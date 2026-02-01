@@ -1,13 +1,7 @@
 /**
  * Transformers.js Web Worker for PII Detection
- * Uses ONNX Runtime Web to run quantized BERT model for Named Entity Recognition
- * Model: Xenova/bert-base-multilingual-cased-ner-hrl (~20MB quantized)
- * 
- * Features:
- * - Cache API for model persistence across sessions
- * - Progress reporting during model download
- * - Chunked text processing for large documents
- * - Entity type mapping to PII categories
+ * Uses BERT NER model for Named Entity Recognition
+ * Combined with regex patterns for comprehensive PII detection
  */
 
 import { pipeline, env } from '@xenova/transformers';
@@ -17,50 +11,23 @@ env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
-// GLiNER-PII: Purpose-built for PII detection with 60+ categories
-const MODEL_NAME = 'knowledgator/gliner-pii-edge-v1.0';
+// Stable, production-ready BERT NER model
+const MODEL_NAME = 'Xenova/bert-base-NER';
 const CACHE_NAME = 'transformers-models-cache';
 let nerPipeline = null;
 let isInitializing = false;
 
-// GLiNER PII Categories - Zero-shot, runtime configurable
-const PII_LABELS = [
-  // Core Identity
-  'person name', 'email address', 'phone number', 'ssn', 'passport number',
-  // Financial
-  'credit card number', 'bank account number', 'routing number', 'tax id',
-  // Location
-  'street address', 'city', 'state', 'zip code', 'country', 'location',
-  // Personal Info
-  'date of birth', 'age', 'gender', 'nationality', 'ethnicity',
-  // Professional
-  'organization', 'company name', 'job title', 'employee id',
-  // Medical
-  'medical record number', 'health insurance number', 'diagnosis',
-  // Online
-  'ip address', 'username', 'password', 'url', 'social media handle',
-  // Government
-  'driver license', 'vehicle registration', 'national id',
-  // Other
-  'biometric data', 'signature', 'photo', 'video'
-];
-
-// Simplified mapping for display
+// Entity type mapping (BIO format support)
 const ENTITY_TYPE_MAP = {
-  'person name': 'name',
-  'email address': 'email',
-  'phone number': 'phone',
-  'ssn': 'ssn',
-  'credit card number': 'credit_card',
-  'street address': 'address',
-  'date of birth': 'dob',
-  'ip address': 'ip',
-  'url': 'url',
-  'organization': 'organization',
-  'company name': 'organization',
-  'location': 'location',
-  'city': 'location',
-  'state': 'location'
+  'PER': 'name',
+  'B-PER': 'name',
+  'I-PER': 'name',
+  'ORG': 'organization',
+  'B-ORG': 'organization',
+  'I-ORG': 'organization',
+  'LOC': 'location',
+  'B-LOC': 'location',
+  'I-LOC': 'location'
 };
 
 /**
@@ -103,7 +70,7 @@ async function initializeModel() {
 
     // Create pipeline with progress callback
     nerPipeline = await pipeline('token-classification', MODEL_NAME, {
-      quantized: true, // Use int8 quantization (~20MB)
+      quantized: true,
       progress_callback: (progress) => {
         const percentage = Math.round((progress.loaded / progress.total) * 100);
         self.postMessage({ 
@@ -176,57 +143,48 @@ async function detectEntities(text) {
   
   for (const chunk of chunks) {
     try {
-      // GLiNER: Pass labels for zero-shot detection
-      const output = await nerPipeline(chunk.text, {
-        labels: PII_LABELS,
-        threshold: 0.5 // Minimum confidence
-      });
+      // Standard NER pipeline call
+      const output = await nerPipeline(chunk.text);
       
-      console.log('[WORKER DEBUG] Raw GLiNER output:', output.length, 'entities');
-      console.log('[WORKER DEBUG] First 5 entities:', output.slice(0, 5));
+      console.log('[WORKER] Raw output:', output.length, 'entities');
       
-      // GLiNER returns cleaner output, less filtering needed
+      // Filter valid entities
       const validOutput = output.filter(entity => {
-        const word = entity.word || entity.text || '';
-        const label = entity.entity || entity.label || '';
+        const word = entity.word || '';
+        const entityType = entity.entity;
         
-        // Must have a valid label we care about
-        if (!ENTITY_TYPE_MAP[label] && !PII_LABELS.includes(label)) {
-          return false;
-        }
+        // Must be a recognized entity type
+        if (!ENTITY_TYPE_MAP[entityType]) return false;
         
-        // Skip very short matches
-        if (word.length <= 2) return false;
+        // Skip subword tokens
+        if (word.startsWith('##')) return false;
         
-        // Skip low confidence
-        if (entity.score < 0.5) return false;
+        // Minimum length
+        if (word.length < 2) return false;
         
-        // Remove punctuation-only
+        // Skip punctuation-only
         if (/^[^\w\s@.-]+$/.test(word)) return false;
+        
+        // Minimum confidence
+        if (entity.score < 0.7) return false;
         
         return true;
       });
       
-      console.log('[WORKER DEBUG] After filtering:', validOutput.length, 'entities');
+      console.log('[WORKER] After filtering:', validOutput.length, 'entities');
       
       // Convert to standardized format
-      const entities = validOutput.map((entity, index) => {
-        const label = entity.entity || entity.label || '';
-        const text = entity.word || entity.text || '';
-        const mappedType = ENTITY_TYPE_MAP[label] || label.replace(/\s+/g, '_');
-        
-        return {
-          id: `gliner-${chunk.offset}-${index}`,
-          type: mappedType,
-          originalType: label,
-          value: text,
-          start: (entity.start || entity.offset || 0) + chunk.offset,
-          end: (entity.end || (entity.start || 0) + text.length) + chunk.offset,
-          confidence: entity.score || 0,
-          redact: true,
-          suggested: getSuggestedReplacement(label, text)
-        };
-      });
+      const entities = validOutput.map((entity, index) => ({
+        id: `ner-${chunk.offset}-${index}`,
+        type: ENTITY_TYPE_MAP[entity.entity] || 'misc',
+        originalType: entity.entity,
+        value: entity.word,
+        start: entity.start + chunk.offset,
+        end: entity.end + chunk.offset,
+        confidence: entity.score,
+        redact: true,
+        suggested: getSuggestedReplacement(entity.entity)
+      }));
 
       allEntities.push(...entities);
     } catch (error) {
@@ -289,46 +247,19 @@ function mergeAdjacentEntities(entities) {
 }
 
 /**
- * Get suggested replacement text based on entity type
+ * Get suggested replacement text
  */
-function getSuggestedReplacement(entityType, originalValue) {
-  // Handle direct GLiNER labels or mapped types
-  const label = entityType.toLowerCase();
+function getSuggestedReplacement(entityType) {
+  const type = ENTITY_TYPE_MAP[entityType] || 'misc';
   
-  // Email patterns
-  if (label.includes('email')) return '[email redacted]';
-  if (label.includes('phone')) return '[phone redacted]';
+  const replacements = {
+    name: '[Name Redacted]',
+    location: '[Location Redacted]',
+    organization: '[Organization Redacted]',
+    misc: '[Redacted]'
+  };
   
-  // Identity
-  if (label.includes('name') && !label.includes('user')) return '[Name Redacted]';
-  if (label.includes('ssn') || label.includes('social security')) return '[SSN redacted]';
-  if (label.includes('passport')) return '[passport redacted]';
-  if (label.includes('license') || label.includes('driver')) return '[ID redacted]';
-  
-  // Financial
-  if (label.includes('credit card')) return '[card redacted]';
-  if (label.includes('bank') || label.includes('account')) return '[account redacted]';
-  if (label.includes('routing')) return '[routing redacted]';
-  
-  // Location
-  if (label.includes('address')) return '[address redacted]';
-  if (label.includes('city') || label.includes('location')) return '[Location Redacted]';
-  if (label.includes('zip') || label.includes('postal')) return '[ZIP redacted]';
-  
-  // Organization
-  if (label.includes('organization') || label.includes('company')) return '[Organization Redacted]';
-  
-  // Personal
-  if (label.includes('dob') || label.includes('date of birth')) return '[DOB redacted]';
-  if (label.includes('age')) return '[age redacted]';
-  
-  // Online
-  if (label.includes('ip')) return '[IP redacted]';
-  if (label.includes('url') || label.includes('website')) return '[URL redacted]';
-  if (label.includes('username')) return '[username redacted]';
-  
-  // Default
-  return '[Redacted]';
+  return replacements[type] || '[Redacted]';
 }
 
 // Listen for messages from main thread
