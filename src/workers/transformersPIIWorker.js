@@ -181,16 +181,23 @@ async function detectEntities(text) {
         if (word.startsWith('##')) return false;
         
         // Remove single letters or too short words
-        if (word.length <= 1) return false;
+        if (word.length <= 2) return false;
         
         // Remove punctuation-only
         if (/^[^\w\s]+$/.test(word)) return false;
         
-        // For names, require at least 2 characters
-        if (type === 'name' && word.length < 2) return false;
+        // Remove common words that are likely false positives
+        const commonWords = ['the', 'and', 'for', 'ion', 'com', 'org', 'net', 'www', 'http', 'https'];
+        if (commonWords.includes(word.toLowerCase())) return false;
         
-        // For organizations and locations, require at least 3 characters
-        if ((type === 'organization' || type === 'location') && word.length < 3) return false;
+        // For names, require at least 3 characters and must start with uppercase
+        if (type === 'name' && (word.length < 3 || !/^[A-Z]/.test(word))) return false;
+        
+        // For organizations and locations, require at least 4 characters
+        if ((type === 'organization' || type === 'location') && word.length < 4) return false;
+        
+        // Minimum confidence threshold
+        if (entity.score < 0.85) return false;
         
         return true;
       });

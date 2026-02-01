@@ -4,6 +4,7 @@ import PropTypes from 'prop-types';
 import { extractTextFromInput, highlightPII } from '../utils/piiDetector';
 import { useTransformersPII } from '../hooks/useTransformersPII';
 import { getEnabledCustomRules, applyCustomRules } from '../utils/customRulesDB';
+import { detectSmartPII } from '../utils/smartDetection';
 import { getFileTypeFromMime } from '../utils/fileHelpers';
 import { showError, showSuccess, showWarning } from '../utils/toast';
 import { getFileSizeLimits } from '../utils/browserCompat';
@@ -276,23 +277,12 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       
       setText(content);
 
-      // Use ML model detection with custom rules
-      let mlDetections = [];
-      if (detectWithML && !modelError) {
-        try {
-          console.log('[DEBUG] Calling ML model for detection...');
-          mlDetections = await detectWithML(content);
-          console.log('[DEBUG] ML detections:', mlDetections.length, 'items found');
-        } catch (err) {
-          console.error('[ERROR] ML detection failed:', err.message);
-        }
-      } else {
-        console.warn('[WARN] ML detection skipped - detectWithML:', !!detectWithML, 'modelError:', modelError);
-      }
+      // Use smart detection: ML (names, orgs, locations) + Regex (email, phone, SSN)
+      console.log('[DEBUG] Calling smart detection...');
+      const smartDetections = await detectSmartPII(content, detectWithML && !modelError ? detectWithML : null);
       const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
-      console.log('[DEBUG] Custom detections:', customDetections.length, 'items found');
-      const detected = [...mlDetections, ...customDetections];
-      console.log('[DEBUG] Total detections:', detected.length, 'items');
+      const detected = [...smartDetections, ...customDetections];
+      console.log('[DEBUG] Smart detections:', smartDetections.length, 'Custom:', customDetections.length, 'Total:', detected.length);
       
       // Check if aborted
       if (signal.aborted) return;
@@ -371,8 +361,34 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
+      {/* AI Model Loading Overlay */}
+      {isModelLoading && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-white/10 rounded-2xl max-w-md w-full p-8 shadow-2xl">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-blue-500/10 border-2 border-blue-500/20 flex items-center justify-center mb-6 animate-pulse">
+                <Download className="w-8 h-8 text-blue-400 animate-bounce" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-3">Downloading AI Model</h3>
+              <p className="text-sm text-zinc-400 mb-6">
+                First-time setup: Loading 20MB NER model...
+              </p>
+              
+              {/* Progress Bar */}
+              <div className="w-full bg-zinc-800 rounded-full h-3 mb-3 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 ease-out"
+                  style={{ width: `${modelProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-zinc-500 font-mono">{Math.round(modelProgress)}% complete</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Model Download Notice */}
-      {showModelNotice && !modelCached && (
+      {showModelNotice && !modelCached && !isModelLoading && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-zinc-900 border border-white/10 rounded-2xl max-w-lg w-full p-8 shadow-2xl">
             <div className="flex items-start gap-4 mb-6">
