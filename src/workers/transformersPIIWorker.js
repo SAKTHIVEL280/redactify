@@ -194,8 +194,89 @@ async function detectEntities(text) {
 
   // Merge adjacent entities of the same type
   const mergedEntities = mergeAdjacentEntities(allEntities);
+  
+  // Apply smart filtering to remove false positives
+  const filteredEntities = filterFalsePositives(mergedEntities);
 
-  return mergedEntities;
+  return filteredEntities;
+}
+
+/**
+ * Filter out common false positive detections
+ * Removes organizations that are likely common words/acronyms
+ */
+function filterFalsePositives(entities) {
+  // Common false positive patterns for organizations
+  const ORG_BLACKLIST = [
+    /^AI$/i,                           // "AI" alone
+    /^CBSE?$/i,                        // "CBS", "CBSE"
+    /^Tech$/i,                         // "Tech" alone
+    /^Systems?$/i,                     // "System", "Systems"
+    /^Tools?$/i,                       // "Tool", "Tools"
+    /^Co$/i,                           // "Co" alone
+    /^Da$/i,                           // "Da" alone
+    /^Re$/i,                           // "Re" alone
+    /^Media$/i,                        // "Media" alone
+    /^Multi$/i,                        // "Multi" alone
+    /^Too$/i,                          // "Too" alone
+    /^Art$/i,                          // "Art" alone
+    /^Intelligence$/i,                 // "Intelligence" alone
+    /^Machine$/i,                      // "Machine" alone
+    /^Learning$/i,                     // "Learning" alone
+    /^Platform$/i,                     // "Platform" alone
+  ];
+
+  // Skills/technologies that are commonly misdetected as organizations
+  const TECH_KEYWORDS = [
+    'python', 'react', 'javascript', 'typescript', 'java', 'html', 'css',
+    'sql', 'mongodb', 'nodejs', 'django', 'flask', 'vue', 'angular',
+    'comfyui', 'yolo', 'chatgpt', 'claude', 'cursor', 'vscode'
+  ];
+
+  return entities.filter(entity => {
+    // Keep non-organization entities
+    if (entity.type !== 'organization') return true;
+
+    const value = entity.value.trim();
+    
+    // Remove if matches blacklist patterns
+    if (ORG_BLACKLIST.some(pattern => pattern.test(value))) {
+      console.log('[WORKER] Filtered false positive org:', value);
+      return false;
+    }
+
+    // Remove single-word organizations that are < 4 characters (likely acronyms)
+    if (!value.includes(' ') && value.length < 4) {
+      console.log('[WORKER] Filtered short org:', value);
+      return false;
+    }
+
+    // Remove if it's a known tech keyword
+    if (TECH_KEYWORDS.includes(value.toLowerCase())) {
+      console.log('[WORKER] Filtered tech keyword as org:', value);
+      return false;
+    }
+
+    // Remove partial fragments (less than 2 words for organizations)
+    const words = value.split(/\s+/).filter(w => w.length > 0);
+    if (words.length === 1 && value.length < 8) {
+      console.log('[WORKER] Filtered single short word org:', value);
+      return false;
+    }
+
+    // Keep if confidence is very high (>0.9) even if short
+    if (entity.confidence > 0.9 && value.length >= 3) {
+      return true;
+    }
+
+    // For organizations, require minimum confidence of 0.75 (higher than default 0.7)
+    if (entity.confidence < 0.75) {
+      console.log('[WORKER] Filtered low confidence org:', value, entity.confidence);
+      return false;
+    }
+
+    return true;
+  });
 }
 
 /**

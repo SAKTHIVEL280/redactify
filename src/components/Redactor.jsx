@@ -361,31 +361,28 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
-      {/* AI Model Loading Overlay - Matches Dark Theme */}
+      {/* AI Model Loading Overlay - Clean Dark Theme */}
       {isModelLoading && (
-        <div className="fixed inset-0 bg-black/98 z-50 flex items-center justify-center p-4">
-          <div className="max-w-md w-full">
-            {/* Animated Icon */}
-            <div className="flex justify-center mb-8">
-              <div className="relative">
-                <div className="absolute inset-0 bg-white/5 rounded-full blur-2xl animate-pulse"></div>
-                <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/10 flex items-center justify-center">
-                  <Download className="w-12 h-12 text-white/90 animate-bounce" />
-                </div>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-zinc-900 border border-white/10 rounded-2xl p-8 shadow-2xl">
+            {/* Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center">
+                <Download className="w-8 h-8 text-white/80" />
               </div>
             </div>
             
             {/* Title */}
-            <h3 className="text-2xl font-bold text-white text-center mb-3">Downloading AI Model</h3>
-            <p className="text-sm text-zinc-400 text-center mb-8">
-              This happens once • ~8MB model will be cached locally
+            <h3 className="text-xl font-bold text-white text-center mb-2">Downloading AI Model</h3>
+            <p className="text-sm text-zinc-400 text-center mb-6">
+              One-time download • ~8MB • Cached for future use
             </p>
             
-            {/* Progress Bar - Matching existing design */}
-            <div className="space-y-3">
-              <div className="relative h-2 bg-zinc-900 rounded-full overflow-hidden border border-white/5">
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="relative h-2 bg-zinc-800 rounded-full overflow-hidden border border-white/5">
                 <div 
-                  className="absolute inset-0 h-full bg-gradient-to-r from-zinc-700 to-zinc-600 transition-all duration-300 ease-out"
+                  className="h-full bg-white/80 transition-all duration-300 ease-out"
                   style={{ width: `${modelProgress}%` }}
                 />
               </div>
@@ -400,16 +397,16 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
       {/* AI Model Download Notice */}
       {showModelNotice && !modelCached && !isModelLoading && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-white/10 rounded-2xl max-w-lg w-full p-8 shadow-2xl">
             <div className="flex items-start gap-4 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
-                <Download className="w-6 h-6 text-blue-400" />
+              <div className="w-12 h-12 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center flex-shrink-0">
+                <Download className="w-6 h-6 text-white/80" />
               </div>
               <div className="flex-1">
                 <h3 className="text-xl font-bold text-white mb-2">AI Model Required</h3>
                 <p className="text-sm text-zinc-400 leading-relaxed">
-                  To enable advanced name detection with AI, we need to download a 20MB model file. This is a <strong>one-time download</strong> and will be cached for future use.
+                  To enable advanced name detection with AI, we need to download an 8MB model file. This is a <strong>one-time download</strong> and will be cached for future use.
                 </p>
               </div>
             </div>
@@ -447,30 +444,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
             </div>
 
             <p className="text-xs text-zinc-600 text-center mt-4 font-mono">
-              Model: Xenova/bert-base-multilingual-cased-ner • Size: ~20MB
+              Model: Xenova/bert-base-NER • Size: ~8MB
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* Model Loading Progress */}
-      {isModelLoading && (
-        <div className="fixed top-4 right-4 z-40 bg-zinc-900 border border-blue-500/30 rounded-xl p-4 shadow-2xl max-w-sm animate-in slide-in-from-right duration-300">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <Download className="w-4 h-4 text-blue-400 animate-pulse" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-bold text-white mb-1">Downloading AI Model</h4>
-              <p className="text-xs text-zinc-400 mb-2">This will take a moment...</p>
-              <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300 rounded-full"
-                  style={{ width: `${modelProgress}%` }}
-                />
-              </div>
-              <p className="text-xs text-zinc-500 mt-1 font-mono">{Math.round(modelProgress)}%</p>
-            </div>
           </div>
         </div>
       )}
@@ -563,7 +538,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
                 {/* Supported formats */}
                 <p className="text-xs text-zinc-600 font-mono uppercase tracking-wider pt-4">
-                  Currently supports .TXT files
+                  Supports .TXT • .PDF • .DOCX
                 </p>
               </div>
             </div>
