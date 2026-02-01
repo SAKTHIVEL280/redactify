@@ -81,8 +81,8 @@ export function useTransformersPII() {
         workerRef.current = null;
       });
 
-      // Initialize model loading
-      workerRef.current.postMessage({ type: 'INIT_MODEL' });
+      // Don't auto-initialize - let user trigger download manually
+      // workerRef.current.postMessage({ type: 'INIT_MODEL' });
     } catch (error) {
       console.error('Failed to initialize Transformers.js worker:', error);
       setError(error.message);
@@ -159,6 +159,15 @@ export function useTransformersPII() {
   }, []);
 
   /**
+   * Manually initialize the model (triggers download)
+   */
+  const initModel = useCallback(() => {
+    if (workerRef.current && !isModelLoaded) {
+      workerRef.current.postMessage({ type: 'INIT_MODEL' });
+    }
+  }, [isModelLoaded]);
+
+  /**
    * Clear cached model (for debugging/updates)
    */
   const clearModelCache = useCallback(async () => {
@@ -177,9 +186,11 @@ export function useTransformersPII() {
   return {
     detectPII,
     isModelLoaded,
+    isModelLoading,
     loadingProgress,
     error,
     isModelCached,
+    initModel,
     clearModelCache
   };
 }

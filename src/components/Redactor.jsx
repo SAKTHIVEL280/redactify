@@ -28,7 +28,9 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
     isModelLoading, 
     modelProgress, 
     modelError,
-    isModelCached: checkModelCached
+    isModelLoaded,
+    isModelCached: checkModelCached,
+    initModel
   } = useTransformersPII();
 
   // Check if model is cached on mount
@@ -37,15 +39,14 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       const cached = await checkModelCached();
       setModelCached(cached);
       
-      // Check if user has previously dismissed the notice
-      const dismissedNotice = localStorage.getItem('modelNoticeDismissed');
-      
-      if (!cached && !dismissedNotice) {
-        // Show notice only once per browser
-        setShowModelNotice(true);
+      if (!cached) {
+        // Auto-start download when entering redactor page
+        console.log('[REDACTOR] Model not cached, starting download...');
+        initModel();
       }
     };
     checkCache();
+  }, [checkModelCached, initModel]);
   }, [checkModelCached]);
 
   // Load custom rules on mount and when isPro changes
@@ -361,27 +362,47 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
-      {/* AI Model Loading Overlay */}
+      {/* AI Model Loading Overlay - App Store Style */}
       {isModelLoading && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-white/10 rounded-2xl max-w-md w-full p-8 shadow-2xl">
             <div className="flex flex-col items-center text-center">
-              <div className="w-16 h-16 rounded-full bg-blue-500/10 border-2 border-blue-500/20 flex items-center justify-center mb-6 animate-pulse">
-                <Download className="w-8 h-8 text-blue-400 animate-bounce" />
+              {/* Animated Icon */}
+              <div className="relative w-20 h-20 mb-6">
+                <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping"></div>
+                <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <Download className="w-10 h-10 text-white animate-bounce" />
+                </div>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-3">Downloading AI Model</h3>
+              
+              {/* Title */}
+              <h3 className="text-2xl font-bold text-white mb-2">Downloading AI Model</h3>
               <p className="text-sm text-zinc-400 mb-6">
-                First-time setup: Loading 20MB NER model...
+                One-time setup • Model will be cached for future use
               </p>
               
               {/* Progress Bar */}
-              <div className="w-full bg-zinc-800 rounded-full h-3 mb-3 overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 ease-out"
-                  style={{ width: `${modelProgress}%` }}
-                />
+              <div className="w-full space-y-2">
+                <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 transition-all duration-300 ease-out animate-shimmer"
+                    style={{ 
+                      width: `${modelProgress}%`,
+                      backgroundSize: '200% 100%'
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-zinc-500 font-mono">{Math.round(modelProgress)}%</p>
+                  <p className="text-xs text-zinc-500">~20MB</p>
+                </div>
               </div>
-              <p className="text-xs text-zinc-500 font-mono">{Math.round(modelProgress)}% complete</p>
+              
+              {/* Info */}
+              <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
+                <AlertCircle className="w-3 h-3" />
+                <span>Requires internet connection for first download</span>
+              </div>
             </div>
           </div>
         </div>
