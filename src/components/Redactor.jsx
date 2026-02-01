@@ -78,7 +78,14 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
             setIsProcessing(true);
             try {
               // Get ML detections
-              const mlDetections = await detectWithML(text);
+              let mlDetections = [];
+              if (detectWithML && !modelError) {
+                try {
+                  mlDetections = await detectWithML(text);
+                } catch (err) {
+                  console.warn('ML detection failed:', err.message);
+                }
+              }
               // Apply custom rules
               const customDetections = applyCustomRules(text, rules);
               // Merge results
@@ -126,18 +133,22 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       setTimeout(async () => {
         try {
           // Use ML model for context-aware detection
-          const mlDetections = await detectWithML(newText);
+          let mlDetections = [];
+          if (detectWithML && !modelError) {
+            try {
+              mlDetections = await detectWithML(newText);
+            } catch (err) {
+              console.warn('ML detection failed:', err.message);
+              // Continue with custom rules only if ML fails
+            }
+          }
           // Apply custom rules if Pro user
           const customDetections = customRules.length > 0 ? applyCustomRules(newText, customRules) : [];
           // Merge results
           const detected = [...mlDetections, ...customDetections];
           onPIIDetected(detected, newText);
         } catch (err) {
-          if (modelError) {
-            showError('ML model failed to load. Please refresh the page.');
-          } else {
-            setError('Error detecting PII: ' + err.message);
-          }
+          setError('Error detecting PII: ' + err.message);
           onPIIDetected([], newText);
         } finally {
           setIsProcessing(false);
@@ -199,7 +210,14 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       setText(content);
 
       // Use ML model detection with custom rules
-      const mlDetections = await detectWithML(content);
+      let mlDetections = [];
+      if (detectWithML && !modelError) {
+        try {
+          mlDetections = await detectWithML(content);
+        } catch (err) {
+          console.warn('ML detection failed:', err.message);
+        }
+      }
       const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
       const detected = [...mlDetections, ...customDetections];
       
@@ -259,7 +277,14 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       setText(content);
 
       // Use ML model detection with custom rules
-      const mlDetections = await detectWithML(content);
+      let mlDetections = [];
+      if (detectWithML && !modelError) {
+        try {
+          mlDetections = await detectWithML(content);
+        } catch (err) {
+          console.warn('ML detection failed:', err.message);
+        }
+      }
       const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
       const detected = [...mlDetections, ...customDetections];
       
@@ -319,7 +344,14 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
     try {
       setIsProcessing(true);
       // Use ML model detection with custom rules
-      const mlDetections = await detectWithML(sample);
+      let mlDetections = [];
+      if (detectWithML && !modelError) {
+        try {
+          mlDetections = await detectWithML(sample);
+        } catch (err) {
+          console.warn('ML detection failed:', err.message);
+        }
+      }
       const customDetections = customRules.length > 0 ? applyCustomRules(sample, customRules) : [];
       const detected = [...mlDetections, ...customDetections];
       onPIIDetected(detected, sample, null, 'txt');
