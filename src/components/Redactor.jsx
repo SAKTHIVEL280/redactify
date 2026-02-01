@@ -47,7 +47,6 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
     };
     checkCache();
   }, [checkModelCached, initModel]);
-  }, [checkModelCached]);
 
   // Load custom rules on mount and when isPro changes
   useEffect(() => {
