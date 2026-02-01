@@ -24,14 +24,29 @@ let isInitializing = false;
 
 // Entity type mapping to PII categories
 // Note: MISC is disabled - it causes too many false positives
+// Handles both simple tags and BIO format (B-PER, I-PER, etc.)
 const ENTITY_TYPE_MAP = {
-  'PER': 'name',        // Person
+  // Simple format
+  'PER': 'name',        
   'PERSON': 'name',
-  'LOC': 'location',    // Location
+  'LOC': 'location',    
   'LOCATION': 'location',
-  'ORG': 'organization',// Organization
+  'ORG': 'organization',
   'ORGANIZATION': 'organization',
-  // 'MISC': 'misc'     // Disabled - too many false positives
+  // BIO format (Begin-Inside-Outside tagging)
+  'B-PER': 'name',
+  'I-PER': 'name',
+  'B-PERSON': 'name',
+  'I-PERSON': 'name',
+  'B-LOC': 'location',
+  'I-LOC': 'location',
+  'B-LOCATION': 'location',
+  'I-LOCATION': 'location',
+  'B-ORG': 'organization',
+  'I-ORG': 'organization',
+  'B-ORGANIZATION': 'organization',
+  'I-ORGANIZATION': 'organization',
+  // 'MISC', 'B-MISC', 'I-MISC' - Disabled for false positives
 };
 
 /**
@@ -149,6 +164,9 @@ async function detectEntities(text) {
     try {
       const output = await nerPipeline(chunk.text);
       
+      console.log('[WORKER DEBUG] Raw NER output:', output.length, 'entities');
+      console.log('[WORKER DEBUG] First 5 entities:', output.slice(0, 5));
+      
       // Filter out subword tokens and low-quality detections
       const validOutput = output.filter(entity => {
         const word = entity.word || '';
@@ -176,6 +194,8 @@ async function detectEntities(text) {
         
         return true;
       });
+      
+      console.log('[WORKER DEBUG] After filtering:', validOutput.length, 'entities');
       
       // Convert to standardized format
       const entities = validOutput.map((entity, index) => ({
