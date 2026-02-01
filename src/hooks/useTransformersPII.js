@@ -20,6 +20,7 @@ export function useTransformersPII() {
   const pendingCallbacksRef = useRef(new Map());
   const requestIdRef = useRef(0);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
+  const [isModelLoading, setIsModelLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState(null);
 
@@ -42,17 +43,20 @@ export function useTransformersPII() {
 
         switch (type) {
           case 'MODEL_LOADING':
+            setIsModelLoading(true);
             setLoadingProgress(progress || 0);
             break;
 
           case 'MODEL_LOADED':
             setIsModelLoaded(true);
+            setIsModelLoading(false);
             setLoadingProgress(100);
             break;
 
           case 'MODEL_ERROR':
             setError(workerError || 'Failed to load model');
             setIsModelLoaded(false);
+            setIsModelLoading(false);
             break;
 
           case 'DETECTION_COMPLETE':
