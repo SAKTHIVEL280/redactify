@@ -17,36 +17,50 @@ env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
-const MODEL_NAME = 'Xenova/bert-base-multilingual-cased-ner-hrl';
+// GLiNER-PII: Purpose-built for PII detection with 60+ categories
+const MODEL_NAME = 'knowledgator/gliner-pii-edge-v1.0';
 const CACHE_NAME = 'transformers-models-cache';
 let nerPipeline = null;
 let isInitializing = false;
 
-// Entity type mapping to PII categories
-// Note: MISC is disabled - it causes too many false positives
-// Handles both simple tags and BIO format (B-PER, I-PER, etc.)
+// GLiNER PII Categories - Zero-shot, runtime configurable
+const PII_LABELS = [
+  // Core Identity
+  'person name', 'email address', 'phone number', 'ssn', 'passport number',
+  // Financial
+  'credit card number', 'bank account number', 'routing number', 'tax id',
+  // Location
+  'street address', 'city', 'state', 'zip code', 'country', 'location',
+  // Personal Info
+  'date of birth', 'age', 'gender', 'nationality', 'ethnicity',
+  // Professional
+  'organization', 'company name', 'job title', 'employee id',
+  // Medical
+  'medical record number', 'health insurance number', 'diagnosis',
+  // Online
+  'ip address', 'username', 'password', 'url', 'social media handle',
+  // Government
+  'driver license', 'vehicle registration', 'national id',
+  // Other
+  'biometric data', 'signature', 'photo', 'video'
+];
+
+// Simplified mapping for display
 const ENTITY_TYPE_MAP = {
-  // Simple format
-  'PER': 'name',        
-  'PERSON': 'name',
-  'LOC': 'location',    
-  'LOCATION': 'location',
-  'ORG': 'organization',
-  'ORGANIZATION': 'organization',
-  // BIO format (Begin-Inside-Outside tagging)
-  'B-PER': 'name',
-  'I-PER': 'name',
-  'B-PERSON': 'name',
-  'I-PERSON': 'name',
-  'B-LOC': 'location',
-  'I-LOC': 'location',
-  'B-LOCATION': 'location',
-  'I-LOCATION': 'location',
-  'B-ORG': 'organization',
-  'I-ORG': 'organization',
-  'B-ORGANIZATION': 'organization',
-  'I-ORGANIZATION': 'organization',
-  // 'MISC', 'B-MISC', 'I-MISC' - Disabled for false positives
+  'person name': 'name',
+  'email address': 'email',
+  'phone number': 'phone',
+  'ssn': 'ssn',
+  'credit card number': 'credit_card',
+  'street address': 'address',
+  'date of birth': 'dob',
+  'ip address': 'ip',
+  'url': 'url',
+  'organization': 'organization',
+  'company name': 'organization',
+  'location': 'location',
+  'city': 'location',
+  'state': 'location'
 };
 
 /**
@@ -162,42 +176,33 @@ async function detectEntities(text) {
   
   for (const chunk of chunks) {
     try {
-      const output = await nerPipeline(chunk.text);
+      // GLiNER: Pass labels for zero-shot detection
+      const output = await nerPipeline(chunk.text, {
+        labels: PII_LABELS,
+        threshold: 0.5 // Minimum confidence
+      });
       
-      console.log('[WORKER DEBUG] Raw NER output:', output.length, 'entities');
+      console.log('[WORKER DEBUG] Raw GLiNER output:', output.length, 'entities');
       console.log('[WORKER DEBUG] First 5 entities:', output.slice(0, 5));
       
-      // Filter out subword tokens and low-quality detections
+      // GLiNER returns cleaner output, less filtering needed
       const validOutput = output.filter(entity => {
-        const word = entity.word || '';
-        const entityType = entity.entity;
+        const word = entity.word || entity.text || '';
+        const label = entity.entity || entity.label || '';
         
-        // Skip entity types we don't want to detect (e.g., MISC)
-        if (!ENTITY_TYPE_MAP[entityType]) return false;
+        // Must have a valid label we care about
+        if (!ENTITY_TYPE_MAP[label] && !PII_LABELS.includes(label)) {
+          return false;
+        }
         
-        const type = ENTITY_TYPE_MAP[entityType];
-        
-        // Always remove subword tokens
-        if (word.startsWith('##')) return false;
-        
-        // Remove single letters or too short words
+        // Skip very short matches
         if (word.length <= 2) return false;
         
+        // Skip low confidence
+        if (entity.score < 0.5) return false;
+        
         // Remove punctuation-only
-        if (/^[^\w\s]+$/.test(word)) return false;
-        
-        // Remove common words that are likely false positives
-        const commonWords = ['the', 'and', 'for', 'ion', 'com', 'org', 'net', 'www', 'http', 'https'];
-        if (commonWords.includes(word.toLowerCase())) return false;
-        
-        // For names, require at least 3 characters and must start with uppercase
-        if (type === 'name' && (word.length < 3 || !/^[A-Z]/.test(word))) return false;
-        
-        // For organizations and locations, require at least 4 characters
-        if ((type === 'organization' || type === 'location') && word.length < 4) return false;
-        
-        // Minimum confidence threshold
-        if (entity.score < 0.85) return false;
+        if (/^[^\w\s@.-]+$/.test(word)) return false;
         
         return true;
       });
@@ -205,17 +210,23 @@ async function detectEntities(text) {
       console.log('[WORKER DEBUG] After filtering:', validOutput.length, 'entities');
       
       // Convert to standardized format
-      const entities = validOutput.map((entity, index) => ({
-        id: `ner-${chunk.offset}-${index}`,
-        type: ENTITY_TYPE_MAP[entity.entity] || 'misc',
-        originalType: entity.entity,
-        value: entity.word,
-        start: entity.start + chunk.offset,
-        end: entity.end + chunk.offset,
-        confidence: entity.score,
-        redact: true,
-        suggested: getSuggestedReplacement(entity.entity, entity.word)
-      }));
+      const entities = validOutput.map((entity, index) => {
+        const label = entity.entity || entity.label || '';
+        const text = entity.word || entity.text || '';
+        const mappedType = ENTITY_TYPE_MAP[label] || label.replace(/\s+/g, '_');
+        
+        return {
+          id: `gliner-${chunk.offset}-${index}`,
+          type: mappedType,
+          originalType: label,
+          value: text,
+          start: (entity.start || entity.offset || 0) + chunk.offset,
+          end: (entity.end || (entity.start || 0) + text.length) + chunk.offset,
+          confidence: entity.score || 0,
+          redact: true,
+          suggested: getSuggestedReplacement(label, text)
+        };
+      });
 
       allEntities.push(...entities);
     } catch (error) {
@@ -281,20 +292,43 @@ function mergeAdjacentEntities(entities) {
  * Get suggested replacement text based on entity type
  */
 function getSuggestedReplacement(entityType, originalValue) {
-  const type = ENTITY_TYPE_MAP[entityType] || 'misc';
+  // Handle direct GLiNER labels or mapped types
+  const label = entityType.toLowerCase();
   
-  switch (type) {
-    case 'name':
-      return '[Name Redacted]';
-    case 'location':
-      return '[Location Redacted]';
-    case 'organization':
-      return '[Organization Redacted]';
-    case 'misc':
-      return '[Redacted]';
-    default:
-      return '[Redacted]';
-  }
+  // Email patterns
+  if (label.includes('email')) return '[email redacted]';
+  if (label.includes('phone')) return '[phone redacted]';
+  
+  // Identity
+  if (label.includes('name') && !label.includes('user')) return '[Name Redacted]';
+  if (label.includes('ssn') || label.includes('social security')) return '[SSN redacted]';
+  if (label.includes('passport')) return '[passport redacted]';
+  if (label.includes('license') || label.includes('driver')) return '[ID redacted]';
+  
+  // Financial
+  if (label.includes('credit card')) return '[card redacted]';
+  if (label.includes('bank') || label.includes('account')) return '[account redacted]';
+  if (label.includes('routing')) return '[routing redacted]';
+  
+  // Location
+  if (label.includes('address')) return '[address redacted]';
+  if (label.includes('city') || label.includes('location')) return '[Location Redacted]';
+  if (label.includes('zip') || label.includes('postal')) return '[ZIP redacted]';
+  
+  // Organization
+  if (label.includes('organization') || label.includes('company')) return '[Organization Redacted]';
+  
+  // Personal
+  if (label.includes('dob') || label.includes('date of birth')) return '[DOB redacted]';
+  if (label.includes('age')) return '[age redacted]';
+  
+  // Online
+  if (label.includes('ip')) return '[IP redacted]';
+  if (label.includes('url') || label.includes('website')) return '[URL redacted]';
+  if (label.includes('username')) return '[username redacted]';
+  
+  // Default
+  return '[Redacted]';
 }
 
 // Listen for messages from main thread

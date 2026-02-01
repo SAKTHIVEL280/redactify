@@ -378,7 +378,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
               {/* Title */}
               <h3 className="text-2xl font-bold text-white mb-2">Downloading AI Model</h3>
               <p className="text-sm text-zinc-400 mb-6">
-                One-time setup • Model will be cached for future use
+                GLiNER-PII: Advanced edge AI for 60+ PII categories
               </p>
               
               {/* Progress Bar */}
