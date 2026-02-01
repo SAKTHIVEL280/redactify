@@ -224,48 +224,88 @@ function filterFalsePositives(entities) {
     /^Machine$/i,                      // "Machine" alone
     /^Learning$/i,                     // "Learning" alone
     /^Platform$/i,                     // "Platform" alone
+    /^Con$/i,                          // "Con" alone
+    /^SA$/i,                           // "SA" alone
   ];
 
   // Skills/technologies that are commonly misdetected as organizations
   const TECH_KEYWORDS = [
     'python', 'react', 'javascript', 'typescript', 'java', 'html', 'css',
     'sql', 'mongodb', 'nodejs', 'django', 'flask', 'vue', 'angular',
-    'comfyui', 'yolo', 'chatgpt', 'claude', 'cursor', 'vscode'
+    'comfyui', 'yolo', 'chatgpt', 'claude', 'cursor', 'vscode', 'ai', 'ml'
   ];
+
+  // Common generic words that shouldn't be organizations
+  const GENERIC_WORDS = ['tools', 'tech', 'systems', 'platform', 'media', 'art', 'intelligence', 'machine', 'learning'];
 
   return entities.filter(entity => {
     // Keep non-organization entities
     if (entity.type !== 'organization') return true;
 
     const value = entity.value.trim();
+    const lowerValue = value.toLowerCase();
     
-    // Remove if matches blacklist patterns
+    // Split into words for analysis
+    const words = value.split(/\s+/).filter(w => w.length > 0);
+    
+    // Remove if the ENTIRE phrase matches blacklist patterns
     if (ORG_BLACKLIST.some(pattern => pattern.test(value))) {
-      console.log('[WORKER] Filtered false positive org:', value);
+      console.log('[WORKER] Filtered blacklisted org:', value);
+      return false;
+    }
+
+    // Remove if ANY word in the phrase is a blacklisted word
+    const hasBlacklistedWord = words.some(word => 
+      ORG_BLACKLIST.some(pattern => pattern.test(word))
+    );
+    if (hasBlacklistedWord) {
+      console.log('[WORKER] Filtered org with blacklisted word:', value);
+      return false;
+    }
+
+    // Remove if it's mostly generic words (e.g., "Art Intelligence Machine Learning")
+    const genericWordCount = words.filter(word => 
+      GENERIC_WORDS.includes(word.toLowerCase())
+    ).length;
+    if (genericWordCount >= Math.ceil(words.length * 0.7)) { // 70% or more are generic
+      console.log('[WORKER] Filtered mostly generic org:', value);
       return false;
     }
 
     // Remove single-word organizations that are < 4 characters (likely acronyms)
-    if (!value.includes(' ') && value.length < 4) {
+    if (words.length === 1 && value.length < 4) {
       console.log('[WORKER] Filtered short org:', value);
       return false;
     }
 
     // Remove if it's a known tech keyword
-    if (TECH_KEYWORDS.includes(value.toLowerCase())) {
+    if (TECH_KEYWORDS.includes(lowerValue)) {
       console.log('[WORKER] Filtered tech keyword as org:', value);
       return false;
     }
 
-    // Remove partial fragments (less than 2 words for organizations)
-    const words = value.split(/\s+/).filter(w => w.length > 0);
+    // Remove fragments that are too short (single word < 8 chars)
     if (words.length === 1 && value.length < 8) {
       console.log('[WORKER] Filtered single short word org:', value);
       return false;
     }
 
-    // Keep if confidence is very high (>0.9) even if short
-    if (entity.confidence > 0.9 && value.length >= 3) {
+    // For multi-word orgs, check if it's just a list of common words
+    if (words.length >= 3) {
+      const allCommon = words.every(word => {
+        const lower = word.toLowerCase();
+        return GENERIC_WORDS.includes(lower) || 
+               TECH_KEYWORDS.includes(lower) ||
+               word.length <= 3;
+      });
+      if (allCommon) {
+        console.log('[WORKER] Filtered all-common-words org:', value);
+        return false;
+      }
+    }
+
+    // Keep if confidence is very high (>0.9) AND it's not obviously generic
+    if (entity.confidence > 0.9 && value.length >= 3 && words.length >= 2) {
       return true;
     }
 

@@ -1,12 +1,16 @@
 /**
  * Smart PII Detection - Combines ML (for names, orgs) + Regex (for patterns like email, phone)
+ * NOW WITH CONTEXT-AWARE FILTERING
  * 
  * Strategy:
  * - ML Model: Detects names, organizations, locations (context-aware)
  * - Regex: Detects emails, phones, SSN, credit cards, IP addresses (pattern-based)
+ * - Context Analysis: Understands document structure to avoid false positives
  * 
  * This avoids false positives from regex date detection while catching all PII types.
  */
+
+import { applyContextAwareFiltering } from './contextAwareDetection';
 
 // Pattern-based PII that ML can't detect
 const PATTERN_REGEX = {
@@ -114,10 +118,10 @@ export function mergeDetections(mlDetections, patternDetections) {
 }
 
 /**
- * Smart detection combining ML + Regex
+ * Smart detection combining ML + Regex + Context Analysis
  * @param {string} text - Text to analyze
  * @param {Function} mlDetectFn - ML detection function
- * @returns {Promise<Array>} Combined detections
+ * @returns {Promise<Array>} Combined detections with context-aware filtering
  */
 export async function detectSmartPII(text, mlDetectFn) {
   if (!text || text.trim().length === 0) return [];
@@ -133,7 +137,12 @@ export async function detectSmartPII(text, mlDetectFn) {
   // Merge and deduplicate
   const merged = mergeDetections(mlDetections, patternDetections);
 
-  console.log('[SMART DETECTION] Merged:', merged.length, 'total detections');
+  console.log('[SMART DETECTION] Merged:', merged.length, 'before context filtering');
 
-  return merged;
+  // Apply context-aware filtering to understand what's actually private
+  const contextFiltered = applyContextAwareFiltering(merged, text);
+
+  console.log('[SMART DETECTION] Context-filtered:', contextFiltered.length, 'final detections');
+
+  return contextFiltered;
 }
