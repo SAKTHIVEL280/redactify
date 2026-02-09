@@ -10,6 +10,9 @@ export default defineConfig({
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -18,7 +21,8 @@ export default defineConfig({
               cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+                purgeOnQuotaError: true
               },
               cacheableResponse: {
                 statuses: [0, 200]
@@ -32,7 +36,8 @@ export default defineConfig({
               cacheName: 'tailwind-cdn-cache',
               expiration: {
                 maxEntries: 5,
-                maxAgeSeconds: 60 * 60 * 24 * 30
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true
               }
             }
           }
