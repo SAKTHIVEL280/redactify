@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { X, RefreshCw, Sparkles, Download, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, RefreshCw, Sparkles, Download, AlertCircle, CheckCircle, FileText } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { extractTextFromInput, highlightPII } from '../utils/piiDetector';
 import { useTransformersPII } from '../hooks/useTransformersPII';
@@ -10,7 +10,7 @@ import { showError, showSuccess, showWarning } from '../utils/toast';
 import { getFileSizeLimits } from '../utils/browserCompat';
 import DocumentViewer from './DocumentViewer';
 
-function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
+function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen, onToggleSidebar, selectedPIIId, onSelectPII }) {
   const [text, setText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -526,47 +526,43 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
         <div className="flex-1 flex flex-col h-full">
           {/* Compact Header Bar */}
           <div className="flex-shrink-0 border-b border-white/5 bg-zinc-950/80 backdrop-blur-xl">
-            <div className="max-w-full mx-auto px-6 py-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                {/* Window Controls */}
-                <div className="flex gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-500/90 shadow-lg shadow-red-500/20"></div>
-                  <div className="w-3 h-3 rounded-full bg-yellow-500/90 shadow-lg shadow-yellow-500/20"></div>
-                  <div className="w-3 h-3 rounded-full bg-green-500/90 shadow-lg shadow-green-500/20"></div>
-                </div>
-
-                {/* Title */}
-                <div className="flex items-center gap-4">
-                  <div className="h-5 w-px bg-white/10"></div>
-                  <h2 className="text-lg font-bold text-white tracking-tight">Document Editor</h2>
+            <div className="max-w-full mx-auto px-4 lg:px-6 py-2 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                {/* File Info */}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <FileText className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                  <span className="text-sm font-medium text-white truncate max-w-[200px]">
+                    {uploadedFile ? uploadedFile.name : 'Untitled Document'}
+                  </span>
+                  {fileType && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-zinc-800/80 px-2 py-0.5 rounded font-mono flex-shrink-0">
+                      {fileType}
+                    </span>
+                  )}
                 </div>
 
                 {/* Stats */}
                 {detectedPII.length > 0 && (
                   <>
-                    <div className="h-5 w-px bg-white/10"></div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                        <span className="text-sm text-white font-mono font-bold">{detectedPII.length}</span>
-                        <span className="text-sm text-zinc-500 font-mono">PII detected</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                        <span className="text-sm text-white font-mono font-bold">{text.length.toLocaleString()}</span>
-                        <span className="text-sm text-zinc-500 font-mono">chars</span>
-                      </div>
+                    <div className="hidden sm:block h-4 w-px bg-white/10"></div>
+                    <div className="hidden sm:flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                      <span className="text-xs text-zinc-400 font-mono">
+                        <span className="text-white font-semibold">{detectedPII.filter(p => p.redact).length}</span>
+                        <span className="text-zinc-600 mx-0.5">/</span>
+                        {detectedPII.length} PII
+                      </span>
                     </div>
                   </>
                 )}
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
                 {isProcessing && (
-                  <div className="flex items-center gap-2 text-red-400 text-sm font-medium font-mono bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Analyzing</span>
+                  <div className="flex items-center gap-2 text-zinc-400 text-xs font-medium font-mono bg-zinc-800/80 px-3 py-1.5 rounded-lg">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span className="hidden sm:inline">Analyzing...</span>
                   </div>
                 )}
 
@@ -576,7 +572,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                       setUploadedFile(null);
                       setFileType(null);
                     }}
-                    className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-all font-mono"
+                    className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-700 rounded-lg transition-all"
                   >
                     Clear File
                   </button>
@@ -584,10 +580,12 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
                 <button
                   onClick={loadSampleResume}
-                  className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-all font-mono"
+                  className="hidden sm:block px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-700 rounded-lg transition-all"
                 >
                   Load Sample
                 </button>
+
+                <div className="h-4 w-px bg-white/10"></div>
 
                 <button
                   onClick={() => {
@@ -596,7 +594,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                     setFileType(null);
                     onPIIDetected([], '', null, null);
                   }}
-                  className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all border border-transparent hover:border-red-500/20"
+                  className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                   title="Clear & Start Over"
                 >
                   <X className="w-4 h-4" />
@@ -607,8 +605,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
           {/* Editor Canvas */}
           <div className="flex-1 min-h-0 bg-black">
-            <div className="h-full max-w-full mx-auto px-4 py-3">
-              <div className="relative h-full bg-zinc-950 rounded-xl border border-white/5 overflow-hidden shadow-2xl">
+            <div className="h-full max-w-full mx-auto">
+              <div className="relative h-full bg-zinc-950 overflow-hidden">
                 {text && detectedPII.length > 0 ? (
                   // Document Viewer - Shows document with PII highlights (for both uploaded files and manual text)
                   <DocumentViewer
@@ -617,6 +615,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                     text={text}
                     detectedPII={detectedPII}
                     onTogglePII={onTogglePII}
+                    selectedPIIId={selectedPIIId}
+                    onSelectPII={onSelectPII}
                   />
                 ) : uploadedFile ? (
                   // Document Viewer - Shows original document without highlights (no PII detected yet)
@@ -626,29 +626,20 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                     text={text}
                     detectedPII={[]}
                     onTogglePII={onTogglePII}
+                    selectedPIIId={selectedPIIId}
+                    onSelectPII={onSelectPII}
                   />
                 ) : (
                   // Text Editor - For manual text input
                   <div className="relative h-full">
-                    {/* Editable Textarea */}
                     <textarea
                       value={text}
                       onChange={handleTextChange}
-                      className="absolute inset-0 w-full h-full p-6 font-mono text-[14px] leading-[1.5] resize-none focus:outline-none bg-zinc-950 text-white caret-red-500 selection:bg-red-500/30"
+                      className="absolute inset-0 w-full h-full p-6 font-mono text-[14px] leading-relaxed resize-none focus:outline-none bg-zinc-950 text-zinc-200 caret-red-500 selection:bg-red-500/20 placeholder:text-zinc-700"
                       placeholder="Start typing or paste your document here..."
                       spellCheck="false"
-                      style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}
+                      style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.08) transparent' }}
                     />
-
-                    {/* Floating Placeholder */}
-                    {!text && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="text-center space-y-4 opacity-30">
-                          <p className="text-2xl text-zinc-600 font-mono">Start typing or paste your content</p>
-                          <p className="text-sm text-zinc-700 font-mono">Press Ctrl+V to paste</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -670,6 +661,10 @@ Redactor.propTypes = {
   })).isRequired,
   isPro: PropTypes.bool.isRequired,
   onTogglePII: PropTypes.func.isRequired,
+  sidebarOpen: PropTypes.bool,
+  onToggleSidebar: PropTypes.func,
+  selectedPIIId: PropTypes.string,
+  onSelectPII: PropTypes.func,
 };
 
 export default Redactor;

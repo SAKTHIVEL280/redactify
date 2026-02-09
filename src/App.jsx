@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Menu, X, Zap } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Menu, X, Zap, PanelRight } from 'lucide-react';
 import Landing from './components/Landing';
 import Redactor from './components/Redactor';
 import Sidebar from './components/Sidebar';
@@ -42,6 +42,8 @@ function App() {
   const [originalText, setOriginalText] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileType, setFileType] = useState(null);
+  const [selectedPIIId, setSelectedPIIId] = useState(null);
+  const prevPIICountRef = useRef(0);
 
   // Scroll detection for navbar
   useEffect(() => {
@@ -97,6 +99,14 @@ function App() {
     };
     checkPro();
   }, []);
+
+  // Auto-open sidebar when PII is first detected
+  useEffect(() => {
+    if (detectedPII.length > 0 && prevPIICountRef.current === 0 && currentView === 'redactor') {
+      setSidebarOpen(true);
+    }
+    prevPIICountRef.current = detectedPII.length;
+  }, [detectedPII.length, currentView]);
 
   // Track analytics (localStorage only, no PII)
   useEffect(() => {
@@ -178,6 +188,11 @@ function App() {
       prevPII.map(item => ({ ...item, redact: redactValue }))
     );
   };
+
+  // Select PII item for bi-directional sync
+  const handleSelectPII = useCallback((id) => {
+    setSelectedPIIId(id);
+  }, []);
 
   // Handle Pro upgrade success
   const handleProSuccess = (licenseData) => {
@@ -297,10 +312,10 @@ function App() {
             {currentView === 'redactor' ? (
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden p-2 text-white hover:bg-zinc-800 rounded-lg transition-colors"
-                title="Open Analysis"
+                className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                title={sidebarOpen ? 'Close Panel' : 'Open Panel'}
               >
-                <Menu className="w-5 h-5" />
+                <PanelRight className="w-5 h-5" />
               </button>
             ) : (
               <button
@@ -352,6 +367,10 @@ function App() {
               detectedPII={detectedPII}
               isPro={isPro}
               onTogglePII={handleTogglePII}
+              sidebarOpen={sidebarOpen}
+              onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+              selectedPIIId={selectedPIIId}
+              onSelectPII={handleSelectPII}
             />
 
             {/* Sidebar - responsive */}
@@ -372,6 +391,8 @@ function App() {
                     uploadedFile={uploadedFile}
                     fileType={fileType}
                     onClose={() => setSidebarOpen(false)}
+                    selectedPIIId={selectedPIIId}
+                    onSelectPII={handleSelectPII}
                   />
                 </div>
               </>

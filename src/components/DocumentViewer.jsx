@@ -8,12 +8,31 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
+function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, selectedPIIId, onSelectPII }) {
   const [docxHtml, setDocxHtml] = useState('');
   const [loading, setLoading] = useState(false);
   const [pdfPages, setPdfPages] = useState([]); // Array of { canvas, textItems, viewport }
   const contentRef = useRef(null);
   const pdfContainerRef = useRef(null);
+
+  // Scroll to selected PII element when selectedPIIId changes (from sidebar click)
+  useEffect(() => {
+    if (selectedPIIId && contentRef.current) {
+      const el = contentRef.current.querySelector(`[data-pii-id="${selectedPIIId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Flash highlight effect
+        el.style.outline = '2px solid rgba(239, 68, 68, 0.8)';
+        el.style.outlineOffset = '2px';
+        el.style.transition = 'outline 0.3s ease';
+        const timer = setTimeout(() => {
+          el.style.outline = '';
+          el.style.outlineOffset = '';
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [selectedPIIId]);
 
   useEffect(() => {
     if (fileType === 'docx' && file) {
@@ -260,14 +279,17 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
   };
 
   const handlePIIClick = useCallback((e) => {
-    const target = e.target;
-    if (target.tagName === 'MARK' && target.hasAttribute('data-pii-id')) {
+    const target = e.target.closest('[data-pii-id]') || e.target;
+    if (target && target.hasAttribute('data-pii-id')) {
       const piiId = target.getAttribute('data-pii-id');
       if (onTogglePII) {
         onTogglePII(piiId);
       }
+      if (onSelectPII) {
+        onSelectPII(piiId);
+      }
     }
-  }, [onTogglePII]);
+  }, [onTogglePII, onSelectPII]);
 
   if (loading) {
     return (
@@ -355,6 +377,7 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
 
         mark:hover {
           opacity: 0.8;
+          outline: 1px solid rgba(0,0,0,0.1);
         }
 
         mark[data-type="email"] {
@@ -384,6 +407,11 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
           line-height: 1.6;
           color: #1a1a1a;
         }
+
+        .docx-content p,
+        .txt-content p {
+          margin: 0.3em 0;
+        }
       `}</style>
     </div>
   );
@@ -394,7 +422,9 @@ DocumentViewer.propTypes = {
   fileType: PropTypes.oneOf(['pdf', 'docx', 'txt']),
   text: PropTypes.string.isRequired,
   detectedPII: PropTypes.array.isRequired,
-  onTogglePII: PropTypes.func
+  onTogglePII: PropTypes.func,
+  selectedPIIId: PropTypes.string,
+  onSelectPII: PropTypes.func,
 };
 
 export default DocumentViewer;
