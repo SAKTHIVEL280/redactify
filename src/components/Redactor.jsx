@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { X, RefreshCw, Sparkles, Download, AlertCircle, CheckCircle, FileText } from 'lucide-react';
+import { X, RefreshCw, Download, FileText } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { extractTextFromInput, highlightPII } from '../utils/piiDetector';
 import { useTransformersPII } from '../hooks/useTransformersPII';
 import { getEnabledCustomRules, applyCustomRules } from '../utils/customRulesDB';
 import { detectSmartPII } from '../utils/smartDetection';
 import { getFileTypeFromMime } from '../utils/fileHelpers';
-import { showError, showSuccess, showWarning } from '../utils/toast';
+import { showError, showWarning } from '../utils/toast';
 import { getFileSizeLimits } from '../utils/browserCompat';
 import DocumentViewer from './DocumentViewer';
 
@@ -18,10 +18,6 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
   const [customRules, setCustomRules] = useState([]);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileType, setFileType] = useState(null);
-  const [showModelNotice, setShowModelNotice] = useState(() => {
-    try { return !localStorage.getItem('modelNoticeDismissed'); }
-    catch { return true; }
-  });
   const [modelCached, setModelCached] = useState(false);
   const abortControllerRef = React.useRef(null);
   const debounceTimerRef = React.useRef(null);
@@ -367,61 +363,6 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                 <p className="text-xs text-zinc-500">Downloading...</p>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* AI Model Download Notice */}
-      {showModelNotice && !modelCached && !isModelLoading && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-white/10 rounded-2xl max-w-lg w-full p-8 shadow-2xl">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="w-12 h-12 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center flex-shrink-0">
-                <Download className="w-6 h-6 text-white/80" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-white mb-2">AI Model Required</h3>
-                <p className="text-sm text-zinc-400 leading-relaxed">
-                  To enable advanced name detection with AI, we need to download an 8MB model file. This is a <strong>one-time download</strong> and will be cached for future use.
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-zinc-950 border border-white/5 rounded-xl p-4 mb-6 space-y-3">
-              <div className="flex items-center gap-3 text-sm">
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                <span className="text-zinc-300">100% offline after download</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                <span className="text-zinc-300">Cached in your browser permanently</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                <span className="text-zinc-300">Higher accuracy for name detection</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-                <span className="text-zinc-300">Requires internet connection for first-time download</span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowModelNotice(false);
-                  localStorage.setItem('modelNoticeDismissed', 'true');
-                  showSuccess('AI detection enabled. Upload a document to begin.');
-                }}
-                className="w-full px-4 py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-200 transition-all"
-              >
-                Continue
-              </button>
-            </div>
-
-            <p className="text-xs text-zinc-600 text-center mt-4 font-mono">
-              Model: Xenova/bert-base-NER • Size: ~8MB
-            </p>
           </div>
         </div>
       )}
