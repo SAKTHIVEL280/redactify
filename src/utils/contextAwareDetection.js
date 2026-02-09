@@ -161,8 +161,8 @@ export function isProperInstitution(value, text) {
 export function shouldRedactEntity(entity, fullText, allDetections) {
   const structure = analyzeDocumentStructure(fullText);
   
-  // Always redact contact information
-  if (['email', 'phone', 'ssn', 'credit_card', 'ip_address'].includes(entity.type)) {
+  // Always redact contact information and sensitive identifiers
+  if (['email', 'phone', 'ssn', 'credit_card', 'ip', 'dob', 'passport', 'bank_account', 'tax_id', 'age', 'address'].includes(entity.type)) {
     return { shouldRedact: true, reason: 'sensitive_contact' };
   }
   
@@ -199,8 +199,14 @@ export function shouldRedactEntity(entity, fullText, allDetections) {
     return { shouldRedact: false, reason: 'unclear_org' };
   }
   
-  // For locations - generally don't redact (education/work locations are public)
+  // For locations - redact if in personal/header section (home address area), skip if in work/education
   if (entity.type === 'location') {
+    const inPersonalSection = isInPersonalSection(entity, fullText, structure);
+    const nearContact = isNearContactInfo(entity, fullText, allDetections);
+    
+    if (inPersonalSection || nearContact) {
+      return { shouldRedact: true, reason: 'personal_location' };
+    }
     return { shouldRedact: false, reason: 'location_public' };
   }
   

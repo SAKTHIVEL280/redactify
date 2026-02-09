@@ -77,8 +77,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
-    if (amount < 100) {
-      return res.status(400).json({ error: 'Minimum amount is ₹1 (100 paise)' });
+    // Server-side price validation — only accept the correct Pro license price
+    const VALID_AMOUNTS = [159900]; // ₹1,599.00 in paise — add more if you introduce tiers
+    if (!VALID_AMOUNTS.includes(amount)) {
+      return res.status(400).json({ error: 'Invalid amount for this product' });
     }
 
     // Initialize Razorpay with server-side keys

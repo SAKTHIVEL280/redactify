@@ -7,8 +7,6 @@
 import { useCallback, useRef, useEffect, useState } from 'react';
 
 const MODEL_NAME = 'Xenova/bert-base-NER';
-const CACHE_NAME = 'transformers-models-cache';
-const MODEL_CACHE_KEY = `${MODEL_NAME}-v1`;
 
 export function useTransformersPII() {
   const workerRef = useRef(null);

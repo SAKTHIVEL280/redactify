@@ -33,12 +33,12 @@ function checkRateLimit(ip) {
   return { allowed: true, remaining: MAX_REQUESTS - rateLimitStore[ip].count };
 }
 
-// Generate license key
+// Generate license key using cryptographically secure random bytes
 function generateLicenseKey() {
   const timestamp = Date.now().toString(36).toUpperCase();
-  const random1 = Math.random().toString(36).substring(2, 8).toUpperCase();
-  const random2 = Math.random().toString(36).substring(2, 8).toUpperCase();
-  const random3 = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const random1 = crypto.randomBytes(4).toString('hex').toUpperCase();
+  const random2 = crypto.randomBytes(4).toString('hex').toUpperCase();
+  const random3 = crypto.randomBytes(4).toString('hex').toUpperCase();
   
   return `RDCT-${timestamp}-${random1}-${random2}-${random3}`;
 }

@@ -441,13 +441,13 @@ function getSuggestedReplacement(entityType) {
   const type = ENTITY_TYPE_MAP[entityType] || 'misc';
   
   const replacements = {
-    name: '[Name Redacted]',
-    location: '[Location Redacted]',
-    organization: '[Organization Redacted]',
-    misc: '[Redacted]'
+    name: '[name redacted]',
+    location: '[location redacted]',
+    organization: '[org redacted]',
+    misc: '[redacted]'
   };
   
-  return replacements[type] || '[Redacted]';
+  return replacements[type] || '[redacted]';
 }
 
 // Listen for messages from main thread

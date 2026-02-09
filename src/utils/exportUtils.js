@@ -49,6 +49,10 @@ export const exportAsTXT = (text, originalFilename = null) => {
     document.body.appendChild(link);
     link.click();
     URL.revokeObjectURL(url);
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
   } finally {
     if (link && link.parentNode) {
       document.body.removeChild(link);
@@ -295,7 +299,8 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
               end: itemEnd,
               x: item.transform[4],
               y: item.transform[5],
-              width: item.width,
+              // Estimate width from font size and character count if pdfjs doesn't provide it
+              width: item.width || (item.str.length * (item.transform[0] || 12) * 0.5),
               height: item.height || (item.transform[0] || 12),
               fontSize: item.transform[0] || 12
             });
@@ -333,10 +338,11 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
             // Draw white rectangle over each overlapping text item
             for (const item of overlapping) {
               const padding = 2;
+              const rectWidth = item.width + padding * 2;
               pdfPage.drawRectangle({
                 x: item.x - padding,
                 y: item.y - padding,
-                width: (item.width || 100) + padding * 2,
+                width: rectWidth,
                 height: item.height + padding * 2,
                 color: rgb(1, 1, 1), // white
                 opacity: 1,

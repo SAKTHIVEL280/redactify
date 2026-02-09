@@ -10,11 +10,14 @@ const LOCALSTORAGE_KEY = 'redactify_pro_license_encrypted';
 // Track if we're using fallback storage
 let useLocalStorageFallback = false;
 
-// Derive encryption key from browser fingerprint
+// Derive encryption key from a stable browser fingerprint
+// Uses properties that don't change on browser updates (unlike userAgent)
 async function getEncryptionKey() {
-  const browserFingerprint = navigator.userAgent + navigator.language + screen.width + screen.height;
+  // Use stable factors: app-specific salt + screen properties + language
+  // navigator.userAgent changes on every browser update, so we avoid it
+  const stableFingerprint = 'redactify-pro-v1-' + navigator.language + '-' + screen.width + 'x' + screen.height + '-' + screen.colorDepth;
   const encoder = new TextEncoder();
-  const data = encoder.encode(browserFingerprint);
+  const data = encoder.encode(stableFingerprint);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   
   return crypto.subtle.importKey(

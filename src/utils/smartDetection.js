@@ -18,8 +18,14 @@ const PATTERN_REGEX = {
   phone: /\+?\d{1,4}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b|\b\d{10,14}\b|\b\(\d{3}\)[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
   ssn: /\b(SSN|Social Security|Social Security Number|SS#)\s*:?\s*(?!000|666|9\d{2})\d{3}[-\s]?(?!00)\d{2}[-\s]?(?!0000)\d{4}\b/gi,
   credit_card: /\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4,6}[-\s]?\d{4,5}[-\s]?\d{3,4}\b/g,
-  ip_address: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g,
+  ip: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g,
   url: /(https?:\/\/[^\s,)]+)|(www\.[^\s,)]+)|([a-z0-9-]+\.(com|org|net|io|dev|app|in|co\.in)\/[^\s,)]+)|((linkedin|github|twitter|facebook|instagram|medium|behance)\.com\/[^\s,)]+)/gi,
+  address: /\b\d+[-/,]?\s*[A-Z][a-z]+(\s+[A-Z][a-z]+){0,3}\s+(Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Place|Pl|Parkway|Pkwy|Nagar|Colony|Extension|Ext|Cross|Main)\b/gi,
+  dob: /\b(DOB|Date of Birth|Born|Birth Date|Birthday)\s*:?\s*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b|\b\d{1,2}[-/](0?[1-9]|1[0-2])[-/](19|20)\d{2}\b/gi,
+  passport: /\b(Passport|Passport No|Passport Number)\s*:?\s*[A-Z]{1,2}[0-9]{6,9}\b/gi,
+  bank_account: /\b(Account|Account No|Account Number|A\/C|IBAN)\s*:?\s*[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b|\b(Account|Account No|Account Number|A\/C)\s*:?\s*\d{9,18}\b/gi,
+  tax_id: /\b(EIN|Tax ID|TIN)\s*:?\s*\d{2}[-\s]?\d{7}\b|\b[A-Z]{5}\d{4}[A-Z]\b|\b(Aadhaar|Aadhar|UID)\s*:?\s*\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/gi,
+  age: /\b(Age|age)\s*:?\s*\d{1,3}\b|\b\d{1,3}\s+years?\s+old\b/gi,
 };
 
 const PATTERN_REPLACEMENTS = {
@@ -27,8 +33,14 @@ const PATTERN_REPLACEMENTS = {
   phone: '[phone redacted]',
   ssn: '[SSN redacted]',
   credit_card: '[card redacted]',
-  ip_address: '[IP redacted]',
+  ip: '[IP redacted]',
   url: '[URL redacted]',
+  address: '[address redacted]',
+  dob: '[DOB redacted]',
+  passport: '[passport redacted]',
+  bank_account: '[account redacted]',
+  tax_id: '[tax ID redacted]',
+  age: '[age redacted]',
 };
 
 /**
@@ -85,7 +97,7 @@ export function mergeDetections(mlDetections, patternDetections) {
 
   // Remove overlaps - keep the one with higher priority
   const merged = [];
-  const priorityOrder = ['email', 'phone', 'ssn', 'credit_card', 'ip_address', 'name', 'organization', 'location'];
+  const priorityOrder = ['email', 'phone', 'ssn', 'credit_card', 'ip', 'dob', 'passport', 'bank_account', 'tax_id', 'address', 'age', 'url', 'name', 'organization', 'location'];
 
   for (const detection of all) {
     // Check if overlaps with any already added detection

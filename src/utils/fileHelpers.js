@@ -2,17 +2,18 @@
  * File helper utilities
  */
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+import { getFileSizeLimits } from './browserCompat';
 
 /**
- * Validate file size
+ * Validate file size against dynamic browser limits
  * @param {File} file - The file to validate
  * @throws {Error} If file exceeds size limit
  * @returns {boolean} - True if file size is valid
  */
 export const validateFileSize = (file) => {
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error(`File size exceeds 10MB limit. Current size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+  const limits = getFileSizeLimits();
+  if (file.size > limits.maxFileSize) {
+    throw new Error(`File size exceeds ${(limits.maxFileSize / 1024 / 1024).toFixed(0)}MB limit. Current size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
   }
   return true;
 };

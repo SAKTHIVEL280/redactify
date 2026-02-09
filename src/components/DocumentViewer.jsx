@@ -271,6 +271,7 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
       'dob': 'bg-indigo-200',
       'passport': 'bg-cyan-200',
       'ip': 'bg-teal-200',
+      'ip_address': 'bg-teal-200',
       'bank_account': 'bg-rose-200',
       'tax_id': 'bg-amber-200',
       'age': 'bg-lime-200'
@@ -282,14 +283,13 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
     const target = e.target.closest('[data-pii-id]') || e.target;
     if (target && target.hasAttribute('data-pii-id')) {
       const piiId = target.getAttribute('data-pii-id');
-      if (onTogglePII) {
-        onTogglePII(piiId);
-      }
+      // Only select/highlight — do NOT toggle redaction state on click.
+      // Users toggle redaction from the sidebar, not by clicking in the document.
       if (onSelectPII) {
         onSelectPII(piiId);
       }
     }
-  }, [onTogglePII, onSelectPII]);
+  }, [onSelectPII]);
 
   if (loading) {
     return (

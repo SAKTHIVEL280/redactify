@@ -5,6 +5,7 @@
  */
 
 import DOMPurify from 'dompurify';
+import { getFileSizeLimits } from './browserCompat';
 
 export const PII_TYPES = {
   EMAIL: 'email',
@@ -249,10 +250,10 @@ export async function extractTextFromInput(input) {
   
   // If it's a File object
   if (input instanceof File) {
-    // Validate file size (10MB limit)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-    if (input.size > MAX_FILE_SIZE) {
-      throw new Error(`File size exceeds 10MB limit. Current size: ${(input.size / 1024 / 1024).toFixed(2)}MB`);
+    // Validate file size — use dynamic limits from browserCompat (matches Redactor's check)
+    const limits = getFileSizeLimits();
+    if (input.size > limits.maxFileSize) {
+      throw new Error(`File size exceeds ${(limits.maxFileSize / 1024 / 1024).toFixed(0)}MB limit. Current size: ${(input.size / 1024 / 1024).toFixed(2)}MB`);
     }
 
     const fileType = input.type;

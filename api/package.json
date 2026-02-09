@@ -1,3 +1,7 @@
 {
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "razorpay": "^2.9.6",
+    "resend": "^3.2.0"
+  }
 }

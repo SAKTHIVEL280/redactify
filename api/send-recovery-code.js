@@ -25,6 +25,20 @@ async function supabaseQuery(endpoint, method = 'GET', body = null) {
 }
 
 export default async function handler(req, res) {
+  // CORS headers
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app').split(',');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    res.setHeader('Access-Control-Allow-Origin', origin || allowedOrigins[0]);
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

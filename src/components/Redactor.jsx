@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 import { extractTextFromInput, highlightPII } from '../utils/piiDetector';
 import { useTransformersPII } from '../hooks/useTransformersPII';
 import { getEnabledCustomRules, applyCustomRules } from '../utils/customRulesDB';
-import { detectSmartPII } from '../utils/smartDetection';
+import { detectSmartPII, mergeDetections } from '../utils/smartDetection';
 import { getFileTypeFromMime } from '../utils/fileHelpers';
 import { showError, showWarning } from '../utils/toast';
 import { getFileSizeLimits } from '../utils/browserCompat';
@@ -78,7 +78,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
               const mlFn = detectWithML && !modelError ? detectWithML : null;
               const smartDetections = await detectSmartPII(text, mlFn);
               const customDetections = applyCustomRules(text, rules);
-              const detected = [...smartDetections, ...customDetections];
+              const detected = mergeDetections(smartDetections, customDetections);
               onPIIDetected(detected, text, uploadedFile, fileType);
             } catch (err) {
               showError('Error re-analyzing with updated rules');
@@ -130,7 +130,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
           const mlFn = detectWithML && !modelError ? detectWithML : null;
           const smartDetections = await detectSmartPII(newText, mlFn);
           const customDetections = customRules.length > 0 ? applyCustomRules(newText, customRules) : [];
-          const detected = [...smartDetections, ...customDetections];
+          const detected = mergeDetections(smartDetections, customDetections);
           onPIIDetected(detected, newText);
         } catch (err) {
           setError('Error detecting PII: ' + err.message);
@@ -198,7 +198,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
       const mlFn = detectWithML && !modelError ? detectWithML : null;
       const smartDetections = await detectSmartPII(content, mlFn);
       const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
-      const detected = [...smartDetections, ...customDetections];
+      const detected = mergeDetections(smartDetections, customDetections);
       
       // Check if aborted
       if (signal.aborted) return;
@@ -259,7 +259,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
       console.log('[DEBUG] Calling smart detection...');
       const smartDetections = await detectSmartPII(content, detectWithML && !modelError ? detectWithML : null);
       const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
-      const detected = [...smartDetections, ...customDetections];
+      const detected = mergeDetections(smartDetections, customDetections);
       console.log('[DEBUG] Smart detections:', smartDetections.length, 'Custom:', customDetections.length, 'Total:', detected.length);
       
       // Check if aborted
@@ -321,7 +321,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
       const mlFn = detectWithML && !modelError ? detectWithML : null;
       const smartDetections = await detectSmartPII(sample, mlFn);
       const customDetections = customRules.length > 0 ? applyCustomRules(sample, customRules) : [];
-      const detected = [...smartDetections, ...customDetections];
+      const detected = mergeDetections(smartDetections, customDetections);
       onPIIDetected(detected, sample, null, 'txt');
     } catch (err) {
       showError('Error detecting PII in sample resume');

@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { X, Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, ChevronRight } from 'lucide-react';
 import { extractTextFromInput, replacePII, highlightPII, PII_COLORS } from '../utils/piiDetector';
-import { detectSmartPII } from '../utils/smartDetection';
+import { detectSmartPII, mergeDetections } from '../utils/smartDetection';
 import { getEnabledCustomRules } from '../utils/customRulesDB';
 import { exportBatchAsZip } from '../utils/batchExportUtils';
+import { isValidFileType, formatFileSize } from '../utils/fileHelpers';
+import { getFileSizeLimits } from '../utils/browserCompat';
 
 export default function BatchProcessor({ isOpen, onClose }) {
   const [files, setFiles] = useState([]);
@@ -15,32 +17,58 @@ export default function BatchProcessor({ isOpen, onClose }) {
 
   const handleFileSelect = useCallback((e) => {
     const selectedFiles = Array.from(e.target.files);
-    const newFiles = selectedFiles.map(file => ({
-      id: Math.random().toString(36).substring(7),
-      file,
-      name: file.name,
-      status: 'pending', // pending, processing, complete, error
-      piiDetected: 0,
-      originalText: null,
-      piiItems: [],
-      error: null
-    }));
+    const limits = getFileSizeLimits();
+    const newFiles = selectedFiles
+      .filter(file => {
+        if (!isValidFileType(file)) {
+          console.warn(`Skipping unsupported file: ${file.name} (${file.type})`);
+          return false;
+        }
+        if (file.size > limits.maxFileSize) {
+          console.warn(`Skipping oversized file: ${file.name} (${formatFileSize(file.size)})`);
+          return false;
+        }
+        return true;
+      })
+      .map(file => ({
+        id: Math.random().toString(36).substring(7),
+        file,
+        name: file.name,
+        status: 'pending', // pending, processing, complete, error
+        piiDetected: 0,
+        originalText: null,
+        piiItems: [],
+        error: null
+      }));
     setFiles(prev => [...prev, ...newFiles]);
   }, []);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     const droppedFiles = Array.from(e.dataTransfer.files);
-    const newFiles = droppedFiles.map(file => ({
-      id: Math.random().toString(36).substring(7),
-      file,
-      name: file.name,
-      status: 'pending',
-      piiDetected: 0,
-      originalText: null,
-      piiItems: [],
-      error: null
-    }));
+    const limits = getFileSizeLimits();
+    const newFiles = droppedFiles
+      .filter(file => {
+        if (!isValidFileType(file)) {
+          console.warn(`Skipping unsupported file: ${file.name} (${file.type})`);
+          return false;
+        }
+        if (file.size > limits.maxFileSize) {
+          console.warn(`Skipping oversized file: ${file.name} (${formatFileSize(file.size)})`);
+          return false;
+        }
+        return true;
+      })
+      .map(file => ({
+        id: Math.random().toString(36).substring(7),
+        file,
+        name: file.name,
+        status: 'pending',
+        piiDetected: 0,
+        originalText: null,
+        piiItems: [],
+        error: null
+      }));
     setFiles(prev => [...prev, ...newFiles]);
   }, []);
 
