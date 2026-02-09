@@ -63,12 +63,13 @@ export const addCustomRule = async (rule) => {
       createdAt: new Date().toISOString()
     };
     
-    if (useLocalStorageFallback) {
+    const db = await initDB();
+    
+    if (!db || useLocalStorageFallback) {
       const id = localStorageFallback.add('customRules', data);
       return { success: true, id };
     }
     
-    const db = await initDB();
     const transaction = db.transaction([CUSTOM_RULES_STORE], 'readwrite');
     const store = transaction.objectStore(CUSTOM_RULES_STORE);
     
@@ -88,11 +89,12 @@ export const addCustomRule = async (rule) => {
 // Get all custom rules
 export const getAllCustomRules = async () => {
   try {
-    if (useLocalStorageFallback) {
+    const db = await initDB();
+    
+    if (!db || useLocalStorageFallback) {
       return localStorageFallback.getAll('customRules');
     }
     
-    const db = await initDB();
     const transaction = db.transaction([CUSTOM_RULES_STORE], 'readonly');
     const store = transaction.objectStore(CUSTOM_RULES_STORE);
     
@@ -121,12 +123,13 @@ export const getEnabledCustomRules = async () => {
 // Update custom rule
 export const updateCustomRule = async (id, updates) => {
   try {
-    if (useLocalStorageFallback) {
+    const db = await initDB();
+    
+    if (!db || useLocalStorageFallback) {
       const success = localStorageFallback.update('customRules', id, updates);
       return { success };
     }
     
-    const db = await initDB();
     const transaction = db.transaction([CUSTOM_RULES_STORE], 'readwrite');
     const store = transaction.objectStore(CUSTOM_RULES_STORE);
     
@@ -158,12 +161,13 @@ export const updateCustomRule = async (id, updates) => {
 // Delete custom rule
 export const deleteCustomRule = async (id) => {
   try {
-    if (useLocalStorageFallback) {
+    const db = await initDB();
+    
+    if (!db || useLocalStorageFallback) {
       const success = localStorageFallback.delete('customRules', id);
       return { success };
     }
     
-    const db = await initDB();
     const transaction = db.transaction([CUSTOM_RULES_STORE], 'readwrite');
     const store = transaction.objectStore(CUSTOM_RULES_STORE);
     
@@ -183,7 +187,9 @@ export const deleteCustomRule = async (id) => {
 // Toggle custom rule enabled state
 export const toggleCustomRule = async (id) => {
   try {
-    if (useLocalStorageFallback) {
+    const db = await initDB();
+    
+    if (!db || useLocalStorageFallback) {
       const rules = localStorageFallback.getAll('customRules');
       const rule = rules.find(r => r.id === id);
       if (!rule) {
@@ -194,7 +200,6 @@ export const toggleCustomRule = async (id) => {
       return { success, enabled };
     }
     
-    const db = await initDB();
     const transaction = db.transaction([CUSTOM_RULES_STORE], 'readwrite');
     const store = transaction.objectStore(CUSTOM_RULES_STORE);
     
@@ -242,8 +247,21 @@ export const applyCustomRules = (text, rules) => {
       // Create regex from pattern
       const regex = new RegExp(rule.pattern, 'gi');
       let match;
+      const startTime = Date.now();
 
       while ((match = regex.exec(text)) !== null) {
+        // ReDoS protection: timeout after 1 second per rule
+        if (Date.now() - startTime > 1000) {
+          console.warn(`Custom rule "${rule.name}" timed out`);
+          break;
+        }
+
+        // Prevent infinite loop on zero-width matches
+        if (match.index === regex.lastIndex) {
+          regex.lastIndex++;
+          continue;
+        }
+
         detected.push({
           id: `custom-${idCounter++}`,
           type: 'custom',

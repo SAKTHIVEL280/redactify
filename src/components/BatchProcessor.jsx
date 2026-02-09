@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { X, Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, ChevronRight } from 'lucide-react';
 import { extractTextFromInput, replacePII, highlightPII, PII_COLORS } from '../utils/piiDetector';
 import { detectSmartPII, mergeDetections } from '../utils/smartDetection';
-import { getEnabledCustomRules } from '../utils/customRulesDB';
+import { getEnabledCustomRules, applyCustomRules } from '../utils/customRulesDB';
 import { exportBatchAsZip } from '../utils/batchExportUtils';
 import { isValidFileType, formatFileSize } from '../utils/fileHelpers';
 import { getFileSizeLimits } from '../utils/browserCompat';
@@ -75,16 +75,20 @@ export default function BatchProcessor({ isOpen, onClose }) {
   const processAllFiles = async () => {
     if (files.length === 0) return;
 
+    // Only process files that haven't been completed yet
+    const filesToProcess = files.filter(f => f.status !== 'complete');
+    if (filesToProcess.length === 0) return;
+
     setProcessing(true);
-    setProgress({ current: 0, total: files.length });
+    setProgress({ current: 0, total: filesToProcess.length });
 
     // Load custom rules once
     const customRules = await getEnabledCustomRules();
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
       
-      setProgress({ current: i + 1, total: files.length });
+      setProgress({ current: i + 1, total: filesToProcess.length });
       setFiles(prev => prev.map(f => 
         f.id === file.id ? { ...f, status: 'processing' } : f
       ));
@@ -94,40 +98,15 @@ export default function BatchProcessor({ isOpen, onClose }) {
         const text = await extractTextFromInput(file.file);
         
         // Detect PII with smart detection (regex + context filtering, no ML in batch mode)
-        const detected = await detectSmartPII(text, null);
+        const smartDetections = await detectSmartPII(text, null);
 
-        // Apply custom rules on top of smart detections
-        if (customRules && customRules.length > 0) {
-          let idCounter = detected.length;
-          customRules.forEach(rule => {
-            if (!rule.enabled) return;
-            try {
-              const regex = new RegExp(rule.pattern, 'g');
-              let match;
-              while ((match = regex.exec(text)) !== null) {
-                // Skip if overlapping with existing detection
-                const overlaps = detected.some(d => 
-                  match.index < d.end && (match.index + match[0].length) > d.start
-                );
-                if (!overlaps) {
-                  detected.push({
-                    id: `custom-${idCounter++}`,
-                    type: 'CUSTOM',
-                    customType: rule.name,
-                    value: match[0],
-                    start: match.index,
-                    end: match.index + match[0].length,
-                    suggested: rule.replacement || '[REDACTED]',
-                    confidence: 1.0,
-                    redact: true
-                  });
-                }
-              }
-            } catch (e) {
-              console.warn(`Invalid custom rule: ${rule.name}`, e);
-            }
-          });
-        }
+        // Apply custom rules using the shared utility (consistent type + ReDoS protection)
+        const customDetections = customRules && customRules.length > 0 
+          ? applyCustomRules(text, customRules) 
+          : [];
+        
+        // Merge with proper priority handling
+        const detected = mergeDetections(smartDetections, customDetections);
         
         setFiles(prev => prev.map(f => 
           f.id === file.id 

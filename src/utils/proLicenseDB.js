@@ -11,11 +11,12 @@ const LOCALSTORAGE_KEY = 'redactify_pro_license_encrypted';
 let useLocalStorageFallback = false;
 
 // Derive encryption key from a stable browser fingerprint
-// Uses properties that don't change on browser updates (unlike userAgent)
+// Uses properties that don't change with resolution, display, or browser updates
 async function getEncryptionKey() {
-  // Use stable factors: app-specific salt + screen properties + language
-  // navigator.userAgent changes on every browser update, so we avoid it
-  const stableFingerprint = 'redactify-pro-v1-' + navigator.language + '-' + screen.width + 'x' + screen.height + '-' + screen.colorDepth;
+  // Use only truly stable factors: app-specific salt + language + platform
+  // Removed: screen.width/height/colorDepth (changes with monitors/resolution)
+  // Removed: navigator.userAgent (changes on browser updates)
+  const stableFingerprint = 'redactify-pro-v1-' + navigator.language + '-' + (navigator.platform || 'unknown');
   const encoder = new TextEncoder();
   const data = encoder.encode(stableFingerprint);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -150,7 +151,11 @@ export const storeProKey = async (licenseData) => {
     if (db && !useLocalStorageFallback) {
       const transaction = db.transaction([STORE_NAME], 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
-      await store.put(data);
+      await new Promise((resolve, reject) => {
+        const request = store.put(data);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
     } else {
       // Fallback to localStorage
       await localStorageFallback.setItem(LOCALSTORAGE_KEY, data);

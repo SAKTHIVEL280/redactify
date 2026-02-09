@@ -53,7 +53,8 @@ export const PII_COLORS = {
   [PII_TYPES.IP_ADDRESS]: 'bg-teal-200 dark:bg-teal-900/50 border-b-2 border-teal-400 dark:border-teal-600',
   [PII_TYPES.BANK_ACCOUNT]: 'bg-rose-200 dark:bg-rose-900/50 border-b-2 border-rose-400 dark:border-rose-600',
   [PII_TYPES.TAX_ID]: 'bg-amber-200 dark:bg-amber-900/50 border-b-2 border-amber-400 dark:border-amber-600',
-  [PII_TYPES.AGE]: 'bg-lime-200 dark:bg-lime-900/50 border-b-2 border-lime-400 dark:border-lime-600'
+  [PII_TYPES.AGE]: 'bg-lime-200 dark:bg-lime-900/50 border-b-2 border-lime-400 dark:border-lime-600',
+  'custom': 'bg-fuchsia-200 dark:bg-fuchsia-900/50 border-b-2 border-fuchsia-400 dark:border-fuchsia-600'
 };
 
 // Enhanced regex patterns per spec
@@ -78,9 +79,8 @@ const PATTERNS = {
   // Credit Cards: Visa, MasterCard, Amex, Discover (with/without spaces/dashes)
   [PII_TYPES.CREDIT_CARD]: /\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4,6}[-\s]?\d{4,5}[-\s]?\d{3,4}\b/g,
   
-  // Date of Birth: Multiple formats (MM/DD/YYYY, DD-MM-YYYY, Month DD, YYYY, etc.)
-  // Also catches "DOB:", "Born:", "Birth Date:", "Birthday:"
-  [PII_TYPES.DATE_OF_BIRTH]: /\b(DOB|Date of Birth|Born|Birth Date|Birthday)\s*:?\s*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b|\b\d{1,2}[-/](0?[1-9]|1[0-2])[-/](19|20)\d{2}\b/gi,
+  // Date of Birth: Requires keyword context (DOB, Born, etc.) or full month name to avoid matching employment dates
+  [PII_TYPES.DATE_OF_BIRTH]: /\b(DOB|Date of Birth|Born|Birth Date|Birthday)\s*:?\s*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/gi,
   
   // Passport: Various country formats - require keyword for ambiguous short formats
   [PII_TYPES.PASSPORT]: /\b(Passport|Passport No|Passport Number)\s*:?\s*[A-Z]{1,2}[0-9]{6,9}\b/gi,
@@ -91,8 +91,8 @@ const PATTERNS = {
   // Bank Account: Various formats (Indian: 9-18 digits, US: 4-17 digits, IBAN)
   [PII_TYPES.BANK_ACCOUNT]: /\b(Account|Account No|Account Number|A\/C|IBAN)\s*:?\s*[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b|\b(Account|Account No|Account Number|A\/C)\s*:?\s*\d{9,18}\b/gi,
   
-  // Tax ID: EIN, TIN, PAN (India), Aadhaar (India) - require keyword prefix for numeric-only formats
-  [PII_TYPES.TAX_ID]: /\b(EIN|Tax ID|TIN)\s*:?\s*\d{2}[-\s]?\d{7}\b|\b[A-Z]{5}\d{4}[A-Z]\b|\b(Aadhaar|Aadhar|UID)\s*:?\s*\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/gi,
+  // Tax ID: EIN, TIN, PAN (India), Aadhaar (India) - all require keyword prefix to avoid false positives
+  [PII_TYPES.TAX_ID]: /\b(EIN|Tax ID|TIN)\s*:?\s*\d{2}[-\s]?\d{7}\b|\b(PAN|PAN No|PAN Number|PAN Card)\s*:?\s*[A-Z]{5}\d{4}[A-Z]\b|\b(Aadhaar|Aadhar|UID)\s*:?\s*\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/gi,
   
   // Age: Explicit age mentions (Age: 25, 25 years old, etc.)
   [PII_TYPES.AGE]: /\b(Age|age)\s*:?\s*\d{1,3}\b|\b\d{1,3}\s+years?\s+old\b/gi

@@ -40,6 +40,13 @@ export const isValidFileType = (file) => {
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ];
+  
+  // Some OS/browser combos set empty MIME for .txt files — check extension as fallback
+  if (!file.type || file.type === '') {
+    const ext = file.name?.split('.').pop()?.toLowerCase();
+    return ext === 'txt' || ext === 'text';
+  }
+  
   return validTypes.includes(file.type);
 };
 

@@ -12,9 +12,10 @@ export function analyzeDocumentStructure(text) {
   const lines = text.split('\n');
   
   // Detect header (first 10% of document or until first empty line)
+  const firstBlankLineIdx = lines.findIndex((line, i) => i > 0 && line.trim() === '');
   const headerEndIndex = Math.min(
     Math.ceil(lines.length * 0.1),
-    lines.findIndex((line, i) => i > 0 && line.trim() === '') || lines.length
+    firstBlankLineIdx >= 0 ? firstBlankLineIdx : lines.length
   );
   
   const headerLines = lines.slice(0, headerEndIndex);
@@ -94,9 +95,9 @@ export function isNearContactInfo(entity, text, allDetections) {
   const end = Math.min(text.length, entity.end + contextWindow);
   const context = text.slice(start, end);
   
-  // Check if there's an email or phone near this entity
+  // Check if there's an email, phone, or URL near this entity
   const hasContactInfo = allDetections.some(other => 
-    (other.type === 'email' || other.type === 'phone') &&
+    (other.type === 'email' || other.type === 'phone' || other.type === 'url') &&
     Math.abs(other.start - entity.start) < contextWindow
   );
   

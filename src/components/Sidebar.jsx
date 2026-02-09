@@ -127,6 +127,15 @@ function Sidebar({ piiItems, onTogglePII, onBulkSetPII, originalText, onUpgradeC
       case PII_TYPES.URL: return 'bg-purple-500';
       case PII_TYPES.NAME: return 'bg-red-500';
       case PII_TYPES.ADDRESS: return 'bg-orange-500';
+      case PII_TYPES.SSN: return 'bg-yellow-500';
+      case PII_TYPES.CREDIT_CARD: return 'bg-pink-500';
+      case PII_TYPES.DATE_OF_BIRTH: return 'bg-indigo-500';
+      case PII_TYPES.PASSPORT: return 'bg-cyan-500';
+      case PII_TYPES.IP_ADDRESS: return 'bg-teal-500';
+      case PII_TYPES.BANK_ACCOUNT: return 'bg-rose-500';
+      case PII_TYPES.TAX_ID: return 'bg-amber-500';
+      case PII_TYPES.AGE: return 'bg-lime-500';
+      case 'custom': return 'bg-fuchsia-500';
       default: return 'bg-zinc-500';
     }
   };

@@ -5,8 +5,8 @@ import mammoth from 'mammoth';
 import { highlightPII } from '../utils/piiDetector';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+// Set up PDF.js worker — use same CDN as piiDetector.js for consistency
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, selectedPIIId, onSelectPII }) {
   const [docxHtml, setDocxHtml] = useState('');
@@ -144,15 +144,29 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
         );
 
         if (matchingItems.length > 0) {
-          // Use bounding box of all matching items
-          const firstItem = textItems[matchingItems[0].idx];
-          const lastItem = textItems[matchingItems[matchingItems.length - 1].idx];
+          // Calculate precise overlay position within text items
+          const firstMatch = matchingItems[0];
+          const lastMatch = matchingItems[matchingItems.length - 1];
+          const firstItem = textItems[firstMatch.idx];
+          const lastItem = textItems[lastMatch.idx];
+
+          // Calculate proportional X start within first item
+          const firstItemChars = firstItem.str.length || 1;
+          const charOffsetInFirst = Math.max(0, idx - firstMatch.start);
+          const firstCharWidth = firstItem.width / firstItemChars;
+          const overlayX = firstItem.x + (charOffsetInFirst * firstCharWidth);
+
+          // Calculate proportional X end within last item
+          const lastItemChars = lastItem.str.length || 1;
+          const charOffsetInLast = Math.min(lastItemChars, piiEnd - lastMatch.start);
+          const lastCharWidth = lastItem.width / lastItemChars;
+          const overlayEndX = lastItem.x + (charOffsetInLast * lastCharWidth);
 
           overlays.push({
             pii,
-            x: firstItem.x,
+            x: overlayX,
             y: firstItem.y,
-            width: (lastItem.x + lastItem.width) - firstItem.x,
+            width: Math.max(overlayEndX - overlayX, firstCharWidth),
             height: Math.max(...matchingItems.map(m => textItems[m.idx].height)),
           });
         }
@@ -165,22 +179,13 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
   }, [detectedPII]);
 
   const formatText = useCallback((content) => {
-    const lines = content.split('\n');
-    let formatted = '';
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      
-      if (!trimmed) {
-        formatted += '<br/>';
-        continue;
-      }
-      
-      formatted += `<p style="margin: 0.2em 0; line-height: 1.5;">${line}</p>`;
-    }
-    
-    return formatted;
+    // Replace newlines with <br/> tags instead of splitting into <p> tags
+    // This avoids breaking <mark> tags that span across line boundaries
+    return content
+      .replace(/\n\n+/g, '</p><p style="margin: 0.2em 0; line-height: 1.5;">')
+      .replace(/\n/g, '<br/>')
+      .replace(/^/, '<p style="margin: 0.2em 0; line-height: 1.5;">')
+      .replace(/$/, '</p>');
   }, []);
 
   const getHighlightedContent = useCallback(() => {
@@ -224,13 +229,34 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
       // Process nodes (do this after walking to avoid modification during traversal)
       nodesToProcess.forEach((node) => {
         const nodeText = node.nodeValue;
-        const index = nodeText.indexOf(pii.value);
         
-        if (index === -1) return;
-
-        const before = nodeText.substring(0, index);
-        const match = pii.value;
-        const after = nodeText.substring(index + match.length);
+        // Find ALL occurrences in this text node, not just the first
+        const fragments = [];
+        let lastIdx = 0;
+        let searchIdx = 0;
+        
+        while (searchIdx < nodeText.length) {
+          const index = nodeText.indexOf(pii.value, searchIdx);
+          if (index === -1) break;
+          
+          // Text before this match
+          if (index > lastIdx) {
+            fragments.push({ type: 'text', content: nodeText.substring(lastIdx, index) });
+          }
+          
+          // The match itself
+          fragments.push({ type: 'mark', content: pii.value });
+          
+          lastIdx = index + pii.value.length;
+          searchIdx = lastIdx;
+        }
+        
+        // Remaining text after all matches
+        if (lastIdx < nodeText.length) {
+          fragments.push({ type: 'text', content: nodeText.substring(lastIdx) });
+        }
+        
+        if (fragments.length === 0 || !fragments.some(f => f.type === 'mark')) return;
 
         // Create mark element with styling
         const colorClass = pii.redact 
@@ -238,19 +264,22 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
           : 'px-1 rounded cursor-pointer transition-colors bg-gray-200 line-through opacity-50';
         
         const title = `${pii.type}: ${pii.redact ? 'Will be redacted' : 'Ignored'} → ${pii.suggested}`;
-        
-        const mark = document.createElement('mark');
-        mark.className = colorClass;
-        mark.setAttribute('title', title);
-        mark.setAttribute('data-pii-id', pii.id);
-        mark.textContent = match;
 
         // Replace text node with fragments
         const parent = node.parentNode;
         if (parent) {
-          if (before) parent.insertBefore(document.createTextNode(before), node);
-          parent.insertBefore(mark, node);
-          if (after) parent.insertBefore(document.createTextNode(after), node);
+          fragments.forEach(fragment => {
+            if (fragment.type === 'text') {
+              parent.insertBefore(document.createTextNode(fragment.content), node);
+            } else {
+              const mark = document.createElement('mark');
+              mark.className = colorClass;
+              mark.setAttribute('title', title);
+              mark.setAttribute('data-pii-id', pii.id);
+              mark.textContent = fragment.content;
+              parent.insertBefore(mark, node);
+            }
+          });
           parent.removeChild(node);
         }
       });
@@ -274,7 +303,8 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
       'ip_address': 'bg-teal-200',
       'bank_account': 'bg-rose-200',
       'tax_id': 'bg-amber-200',
-      'age': 'bg-lime-200'
+      'age': 'bg-lime-200',
+      'custom': 'bg-fuchsia-200'
     };
     return colorMap[type] || 'bg-gray-200';
   };

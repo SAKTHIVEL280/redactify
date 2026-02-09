@@ -236,6 +236,7 @@ export const exportAsDOCX = async (text, originalFilename = null, originalFile =
 };
 
 // Export as PDF (Pro tier only) — preserves original PDF layout when possible
+// SECURITY: Flattens PDF pages to images to prevent copy-paste extraction of redacted text
 export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPro = false, originalFilename = null) => {
   try {
     // Generate filename from original or use default
@@ -245,28 +246,28 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
       filename = `${nameWithoutExt}_redacted.pdf`;
     }
 
-    // If original file is a PDF, preserve formatting by overlaying redaction boxes
+    // If original file is a PDF, flatten to images with burnt-in redactions
+    // This completely removes the text layer, preventing copy-paste extraction
     if (uploadedFile && uploadedFile.type === 'application/pdf' && piiItems.length > 0) {
       try {
         const arrayBuffer = await uploadedFile.arrayBuffer();
         const pdfjsLib = await import('pdfjs-dist');
         pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
         
-        // Load with pdfjs to get text positions
+        // Load with pdfjs for rendering and text positions
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
         const pdfDoc = await loadingTask.promise;
         
-        // Load with pdf-lib to modify
-        const pdfLibDoc = await PDFDocument.load(arrayBuffer);
-        const timesFont = await pdfLibDoc.embedFont(StandardFonts.Helvetica);
+        // Create new PDF with pdf-lib (will contain only images, no extractable text)
+        const newPdfDoc = await PDFDocument.create();
         
-        // Build a global text position map page by page
+        // Build a global text position map (same logic as text extraction)
         let globalOffset = 0;
+        const allPageItems = [];
         
         for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
           const page = await pdfDoc.getPage(pageNum);
           const textContent = await page.getTextContent();
-          const viewport = page.getViewport({ scale: 1.0 });
           
           // Sort items the same way as extractTextFromPDF
           textContent.items.sort((a, b) => {
@@ -278,36 +279,31 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
             return bY - aY;
           });
           
-          // Build position map for this page
           const pageItems = [];
           let lastY = null;
           
           textContent.items.forEach((item, index) => {
             const currentY = item.transform[5];
             
-            // Account for newlines
             if (lastY !== null && Math.abs(currentY - lastY) > 5) {
-              globalOffset += 1; // newline character
+              globalOffset += 1; // newline
             }
             
-            const itemStart = globalOffset;
-            const itemEnd = globalOffset + item.str.length;
+            const fontSize = Math.abs(item.transform[0]) || 12;
             
             pageItems.push({
               str: item.str,
-              start: itemStart,
-              end: itemEnd,
-              x: item.transform[4],
-              y: item.transform[5],
-              // Estimate width from font size and character count if pdfjs doesn't provide it
-              width: item.width || (item.str.length * (item.transform[0] || 12) * 0.5),
-              height: item.height || (item.transform[0] || 12),
-              fontSize: item.transform[0] || 12
+              start: globalOffset,
+              end: globalOffset + item.str.length,
+              pdfX: item.transform[4],
+              pdfY: item.transform[5],
+              width: item.width || (item.str.length * fontSize * 0.5),
+              height: item.height || fontSize,
+              fontSize: fontSize
             });
             
             globalOffset += item.str.length;
             
-            // Account for space between items on same line
             if (index < textContent.items.length - 1) {
               const nextItem = textContent.items[index + 1];
               const nextY = nextItem.transform[5];
@@ -319,52 +315,81 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
             lastY = currentY;
           });
           
-          globalOffset += 2; // paragraph break between pages
+          globalOffset += 2; // page break
+          allPageItems.push(pageItems);
+        }
+        
+        // Render each page to canvas, apply redactions, embed as image
+        const renderScale = 2.0; // 2x for crisp text
+        const piiToRedact = piiItems.filter(p => p.redact);
+        
+        for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+          const page = await pdfDoc.getPage(pageNum);
+          const viewport = page.getViewport({ scale: renderScale });
           
-          // Find PIIs that fall on this page
-          const pdfPage = pdfLibDoc.getPage(pageNum - 1);
-          const pageHeight = pdfPage.getHeight();
+          // Create canvas and render the page
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
           
-          const piiToRedact = piiItems.filter(p => p.redact);
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          
+          // Draw redaction boxes directly on the canvas
+          const pageItems = allPageItems[pageNum - 1];
           
           for (const pii of piiToRedact) {
-            // Find page items that overlap with this PII
             const overlapping = pageItems.filter(item => 
               item.start < pii.end && item.end > pii.start
             );
             
             if (overlapping.length === 0) continue;
             
-            // Draw white rectangle over each overlapping text item
+            // Draw white boxes over each overlapping text item
             for (const item of overlapping) {
               const padding = 2;
-              const rectWidth = item.width + padding * 2;
-              pdfPage.drawRectangle({
-                x: item.x - padding,
-                y: item.y - padding,
-                width: rectWidth,
-                height: item.height + padding * 2,
-                color: rgb(1, 1, 1), // white
-                opacity: 1,
-              });
+              const canvasX = item.pdfX * renderScale - padding;
+              // PDF Y is bottom-up; canvas Y is top-down
+              const canvasY = viewport.height - (item.pdfY * renderScale) - (item.height * renderScale) - padding;
+              const canvasW = item.width * renderScale + padding * 2;
+              const canvasH = item.height * renderScale + padding * 2;
+              
+              ctx.fillStyle = 'white';
+              ctx.fillRect(canvasX, canvasY, canvasW, canvasH);
             }
             
-            // Draw replacement text at the first overlapping item's position
+            // Draw replacement text at the first item's position
             const firstItem = overlapping[0];
-            const replacement = pii.suggested || `[REDACTED]`;
-            const replaceFontSize = Math.min(firstItem.fontSize * 0.9, 10);
+            const replacement = pii.suggested || '[REDACTED]';
+            const fontSize = Math.min(firstItem.fontSize * 0.9, 10) * renderScale;
             
-            pdfPage.drawText(replacement, {
-              x: firstItem.x,
-              y: firstItem.y,
-              size: replaceFontSize,
-              font: timesFont,
-              color: rgb(0.6, 0, 0) // dark red for redacted text
-            });
+            ctx.font = `bold ${fontSize}px Helvetica, Arial, sans-serif`;
+            ctx.fillStyle = 'rgb(153, 0, 0)'; // dark red
+            const textX = firstItem.pdfX * renderScale;
+            const textY = viewport.height - (firstItem.pdfY * renderScale) - 1;
+            ctx.fillText(replacement, textX, textY);
           }
+          
+          // Convert canvas to image bytes
+          const imageDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const imageResponse = await fetch(imageDataUrl);
+          const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
+          
+          // Embed image in new PDF
+          const jpgImage = await newPdfDoc.embedJpg(imageBytes);
+          const origViewport = page.getViewport({ scale: 1.0 });
+          const newPage = newPdfDoc.addPage([origViewport.width, origViewport.height]);
+          
+          newPage.drawImage(jpgImage, {
+            x: 0,
+            y: 0,
+            width: origViewport.width,
+            height: origViewport.height,
+          });
         }
         
-        const pdfBytes = await pdfLibDoc.save();
+        // Save and download the flattened PDF
+        const pdfBytes = await newPdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         let link = document.createElement('a');
@@ -377,7 +402,7 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
         
         return { success: true, preservedFormat: true };
       } catch (pdfError) {
-        console.error('Failed to preserve PDF format, falling back:', pdfError);
+        console.error('Failed to export secure PDF, falling back:', pdfError);
         // Fall through to plain text PDF generation
       }
     }
@@ -453,6 +478,11 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
       // Empty line spacing
       if (!line.trim()) {
         yPosition -= lineHeight / 2;
+        // Check page boundary after empty line spacing too
+        if (yPosition < margin + lineHeight) {
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          yPosition = pageHeight - margin;
+        }
       }
     }
     

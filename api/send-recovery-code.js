@@ -69,11 +69,11 @@ export default async function handler(req, res) {
     // Check rate limiting - max 3 codes per email per 15 minutes
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const recentCodes = await supabaseQuery(
-      `verification_codes?email=eq.${encodeURIComponent(emailLower)}&created_at=gte.${fifteenMinutesAgo}&select=count`,
+      `verification_codes?email=eq.${encodeURIComponent(emailLower)}&created_at=gte.${fifteenMinutesAgo}&select=id`,
       'GET'
     );
     
-    if (recentCodes && recentCodes.length > 0 && recentCodes[0].count >= 3) {
+    if (recentCodes && recentCodes.length >= 3) {
       return res.status(429).json({ 
         error: 'Too many requests',
         message: 'Please wait 15 minutes before requesting a new code' 

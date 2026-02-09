@@ -102,7 +102,28 @@ export default async function handler(req, res) {
       { verified: true }
     );
 
-    res.status(200).json({ success: true, verified: true });
+    // Fetch the license key to return to the client
+    const licenses = await supabaseQuery(
+      `pro_licenses?email=eq.${encodeURIComponent(emailLower)}&is_active=eq.true&select=license_key,order_id,payment_id&order=created_at.desc&limit=1`,
+      'GET'
+    );
+
+    if (!licenses || licenses.length === 0) {
+      return res.status(404).json({ 
+        error: 'License not found',
+        message: 'No active license found for this email'
+      });
+    }
+
+    const license = licenses[0];
+
+    res.status(200).json({ 
+      success: true, 
+      verified: true,
+      licenseKey: license.license_key,
+      orderId: license.order_id,
+      paymentId: license.payment_id
+    });
   } catch (error) {
     console.error('Error verifying code:', error);
     res.status(500).json({ error: 'Verification failed' });

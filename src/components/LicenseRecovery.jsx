@@ -80,8 +80,23 @@ const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
         return;
       }
 
-      // Code verified, now recover license
-      await handleRecover();
+      // Code verified — the API now returns the license key directly
+      if (verifyData.licenseKey) {
+        await storeProKey({
+          key: verifyData.licenseKey,
+          orderId: verifyData.orderId || 'recovered',
+          paymentId: verifyData.paymentId || 'recovered',
+          purchasedAt: new Date().toISOString(),
+        });
+        
+        setStep('success');
+        setStatus({ type: 'success', message: 'License recovered and activated!' });
+        if (onSuccess) onSuccess();
+        setLoading(false);
+      } else {
+        // Fallback: use the old recovery flow
+        await handleRecover();
+      }
     } catch (err) {
       setStatus({ type: 'error', message: 'Verification failed' });
       setLoading(false);

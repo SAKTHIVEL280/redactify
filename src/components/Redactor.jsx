@@ -102,6 +102,18 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPro]);
 
+  // Cleanup debounce timer and abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   // Memoize highlighted HTML to avoid unnecessary re-renders
   const highlightedHTML = useMemo(() => {
     if (!text || !detectedPII || detectedPII.length === 0) {
