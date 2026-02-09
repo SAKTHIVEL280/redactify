@@ -116,23 +116,70 @@ async function detectEntities(text) {
   const chunks = [];
   
   if (text.length > MAX_CHUNK_LENGTH) {
-    // Split by sentences/paragraphs to maintain context
-    const sentences = text.split(/[.!?\n]+/);
+    // Split by paragraph breaks first, then by newlines to preserve emails/URLs
+    const paragraphs = text.split(/\n\n+/);
     let currentChunk = '';
     let currentOffset = 0;
+    let charPos = 0;
 
-    for (const sentence of sentences) {
-      if ((currentChunk + sentence).length > MAX_CHUNK_LENGTH && currentChunk) {
+    for (let i = 0; i < paragraphs.length; i++) {
+      const para = paragraphs[i];
+      // Account for the separator that was split out
+      const separator = i > 0 ? text.slice(charPos - (text.slice(charPos).match(/^\n\n+/) || [''])[0].length, charPos) : '';
+      
+      if (currentChunk.length > 0 && (currentChunk.length + para.length + 2) > MAX_CHUNK_LENGTH) {
         chunks.push({ text: currentChunk, offset: currentOffset });
-        currentOffset += currentChunk.length;
-        currentChunk = sentence;
+        currentOffset = charPos;
+        currentChunk = para;
       } else {
-        currentChunk += (currentChunk ? '. ' : '') + sentence;
+        if (currentChunk.length > 0) {
+          currentChunk += '\n\n' + para;
+        } else {
+          currentChunk = para;
+        }
+      }
+
+      // If a single paragraph is too long, split it by newlines
+      if (currentChunk.length > MAX_CHUNK_LENGTH) {
+        const lines = currentChunk.split(/\n/);
+        currentChunk = '';
+        let lineOffset = currentOffset;
+        for (const line of lines) {
+          if (currentChunk.length > 0 && (currentChunk.length + line.length + 1) > MAX_CHUNK_LENGTH) {
+            chunks.push({ text: currentChunk, offset: lineOffset });
+            lineOffset = lineOffset + currentChunk.length + 1;
+            currentChunk = line;
+          } else {
+            if (currentChunk.length > 0) {
+              currentChunk += '\n' + line;
+            } else {
+              currentChunk = line;
+            }
+          }
+        }
+        currentOffset = lineOffset;
+      }
+
+      // Track position in original text
+      charPos += para.length;
+      // Skip past the paragraph separator in original text
+      while (charPos < text.length && text[charPos] === '\n') {
+        charPos++;
       }
     }
 
     if (currentChunk) {
       chunks.push({ text: currentChunk, offset: currentOffset });
+    }
+
+    // Recalculate correct offsets by finding each chunk in original text
+    let searchFrom = 0;
+    for (const chunk of chunks) {
+      const idx = text.indexOf(chunk.text, searchFrom);
+      if (idx !== -1) {
+        chunk.offset = idx;
+        searchFrom = idx + chunk.text.length;
+      }
     }
   } else {
     chunks.push({ text, offset: 0 });

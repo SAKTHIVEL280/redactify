@@ -3,15 +3,23 @@ import PropTypes from 'prop-types';
 import DOMPurify from 'dompurify';
 import mammoth from 'mammoth';
 import { highlightPII } from '../utils/piiDetector';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
   const [docxHtml, setDocxHtml] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pdfPages, setPdfPages] = useState([]); // Array of { canvas, textItems, viewport }
   const contentRef = useRef(null);
+  const pdfContainerRef = useRef(null);
 
   useEffect(() => {
     if (fileType === 'docx' && file) {
       renderDOCX();
+    } else if (fileType === 'pdf' && file) {
+      renderPDF();
     }
   }, [file, fileType]);
 
@@ -34,6 +42,108 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
       setLoading(false);
     }
   }, [file]);
+
+  const renderPDF = useCallback(async () => {
+    setLoading(true);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pages = [];
+      const scale = 1.5; // Render at 1.5x for crisp text
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale });
+
+        // Render page to canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        // Get text content with positions
+        const textContent = await page.getTextContent();
+
+        pages.push({
+          dataUrl: canvas.toDataURL(),
+          width: viewport.width,
+          height: viewport.height,
+          textItems: textContent.items.map(item => ({
+            str: item.str,
+            // Transform position from PDF space to canvas space
+            x: item.transform[4] * scale,
+            y: viewport.height - (item.transform[5] * scale) - (item.height * scale || 12 * scale),
+            width: item.width * scale,
+            height: (item.height || 12) * scale,
+          }))
+        });
+      }
+
+      setPdfPages(pages);
+    } catch (error) {
+      console.error('PDF render error:', error);
+      setPdfPages([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [file]);
+
+  // Find which text items in a PDF page match a PII detection
+  const getPdfPIIOverlays = useCallback((textItems) => {
+    if (!detectedPII || detectedPII.length === 0 || !textItems) return [];
+
+    const overlays = [];
+    // Build a running text from items to find PII positions
+    let runningText = '';
+    const itemPositions = []; // maps char position to text item index
+
+    textItems.forEach((item, idx) => {
+      const start = runningText.length;
+      runningText += item.str;
+      itemPositions.push({ start, end: runningText.length, idx });
+      // Add space between items unless item ends with space
+      if (!item.str.endsWith(' ')) {
+        runningText += ' ';
+      }
+    });
+
+    detectedPII.forEach(pii => {
+      if (!pii.value) return;
+      // Search for the PII value in the running text
+      let searchFrom = 0;
+      while (searchFrom < runningText.length) {
+        const idx = runningText.indexOf(pii.value, searchFrom);
+        if (idx === -1) break;
+
+        const piiEnd = idx + pii.value.length;
+
+        // Find all text items that overlap with this PII match
+        const matchingItems = itemPositions.filter(
+          ip => ip.start < piiEnd && ip.end > idx
+        );
+
+        if (matchingItems.length > 0) {
+          // Use bounding box of all matching items
+          const firstItem = textItems[matchingItems[0].idx];
+          const lastItem = textItems[matchingItems[matchingItems.length - 1].idx];
+
+          overlays.push({
+            pii,
+            x: firstItem.x,
+            y: firstItem.y,
+            width: (lastItem.x + lastItem.width) - firstItem.x,
+            height: Math.max(...matchingItems.map(m => textItems[m.idx].height)),
+          });
+        }
+
+        searchFrom = idx + 1;
+      }
+    });
+
+    return overlays;
+  }, [detectedPII]);
 
   const formatText = useCallback((content) => {
     const lines = content.split('\n');
@@ -151,8 +261,8 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
 
   const handlePIIClick = useCallback((e) => {
     const target = e.target;
-    if (target.tagName === 'MARK' && target.hasAttribute('data-id')) {
-      const piiId = parseInt(target.getAttribute('data-id'));
+    if (target.tagName === 'MARK' && target.hasAttribute('data-pii-id')) {
+      const piiId = target.getAttribute('data-pii-id');
       if (onTogglePII) {
         onTogglePII(piiId);
       }
@@ -170,7 +280,54 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII }) {
   return (
     <div className="flex-1 overflow-auto bg-white h-full" onClick={handlePIIClick}>
       <div className="max-w-4xl mx-auto p-8 pb-20" ref={contentRef}>
-        {fileType === 'docx' && docxHtml ? (
+        {fileType === 'pdf' && pdfPages.length > 0 ? (
+          <div ref={pdfContainerRef} className="pdf-canvas-content">
+            {pdfPages.map((page, pageIdx) => (
+              <div 
+                key={pageIdx} 
+                className="relative mb-4 bg-white shadow-lg mx-auto"
+                style={{ width: page.width, maxWidth: '100%' }}
+              >
+                <img 
+                  src={page.dataUrl} 
+                  alt={`Page ${pageIdx + 1}`} 
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                  draggable={false}
+                />
+                {/* PII overlay layer */}
+                <div 
+                  className="absolute inset-0" 
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {getPdfPIIOverlays(page.textItems).map((overlay, oidx) => {
+                    const scaleX = 100 / page.width; // percent
+                    return (
+                      <div
+                        key={oidx}
+                        data-pii-id={overlay.pii.id}
+                        title={`${overlay.pii.type}: ${overlay.pii.redact ? 'Will be redacted' : 'Ignored'} → ${overlay.pii.suggested}`}
+                        className={`absolute cursor-pointer transition-colors ${
+                          overlay.pii.redact 
+                            ? getPIIColorClass(overlay.pii.type)
+                            : 'bg-gray-200 line-through opacity-50'
+                        }`}
+                        style={{
+                          left: `${overlay.x * scaleX}%`,
+                          top: `${(overlay.y / page.height) * 100}%`,
+                          width: `${overlay.width * scaleX}%`,
+                          height: `${(overlay.height / page.height) * 100}%`,
+                          opacity: 0.4,
+                          pointerEvents: 'auto',
+                          borderRadius: '2px',
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : fileType === 'docx' && docxHtml ? (
           <div 
             className="docx-content bg-white rounded-lg shadow-lg p-8"
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getHighlightedDOCXContent(), {

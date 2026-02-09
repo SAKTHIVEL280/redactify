@@ -45,8 +45,12 @@ function generateLicenseKey() {
 
 export default async function handler(req, res) {
   // CORS headers
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app').split(',');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    res.setHeader('Access-Control-Allow-Origin', origin || allowedOrigins[0]);
+  }
   res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -76,7 +80,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('Verify API called with body:', req.body);
+    console.log('Verify API called');
     
     const {
       razorpay_order_id,
@@ -109,9 +113,6 @@ export default async function handler(req, res) {
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex');
 
-    console.log('Generated signature:', generatedSignature);
-    console.log('Received signature:', razorpay_signature);
-
     if (generatedSignature !== razorpay_signature) {
       console.log('Signature mismatch');
       return res.status(400).json({ 
@@ -121,13 +122,11 @@ export default async function handler(req, res) {
     }
 
     console.log('Signature verified successfully');
-
-    console.log('Signature verified successfully');
     
     // Payment verified successfully
     // Generate license key
     const licenseKey = generateLicenseKey();
-    console.log('Generated license key:', licenseKey);
+    console.log('License key generated successfully');
 
     // Optional: Store in Supabase for server-side verification
     if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {

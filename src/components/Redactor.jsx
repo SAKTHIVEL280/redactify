@@ -21,6 +21,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
   const [showModelNotice, setShowModelNotice] = useState(false);
   const [modelCached, setModelCached] = useState(false);
   const abortControllerRef = React.useRef(null);
+  const debounceTimerRef = React.useRef(null);
   
   // Use Transformers.js ML model for PII detection (context-aware)
   const { 
@@ -78,19 +79,11 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
           if (text && text.trim().length > 10) {
             setIsProcessing(true);
             try {
-              // Get ML detections
-              let mlDetections = [];
-              if (detectWithML && !modelError) {
-                try {
-                  mlDetections = await detectWithML(text);
-                } catch (err) {
-                  console.warn('ML detection failed:', err.message);
-                }
-              }
-              // Apply custom rules
+              // Use unified smart detection pipeline
+              const mlFn = detectWithML && !modelError ? detectWithML : null;
+              const smartDetections = await detectSmartPII(text, mlFn);
               const customDetections = applyCustomRules(text, rules);
-              // Merge results
-              const detected = [...mlDetections, ...customDetections];
+              const detected = [...smartDetections, ...customDetections];
               onPIIDetected(detected, text, uploadedFile, fileType);
             } catch (err) {
               showError('Error re-analyzing with updated rules');
@@ -128,25 +121,21 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
     setText(newText);
     setError(null);
 
+    // Clear previous debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
     if (newText.trim().length > 10) {
       setIsProcessing(true);
       // Debounce detection for performance
-      setTimeout(async () => {
+      debounceTimerRef.current = setTimeout(async () => {
         try {
-          // Use ML model for context-aware detection
-          let mlDetections = [];
-          if (detectWithML && !modelError) {
-            try {
-              mlDetections = await detectWithML(newText);
-            } catch (err) {
-              console.warn('ML detection failed:', err.message);
-              // Continue with custom rules only if ML fails
-            }
-          }
-          // Apply custom rules if Pro user
+          // Use unified smart detection pipeline
+          const mlFn = detectWithML && !modelError ? detectWithML : null;
+          const smartDetections = await detectSmartPII(newText, mlFn);
           const customDetections = customRules.length > 0 ? applyCustomRules(newText, customRules) : [];
-          // Merge results
-          const detected = [...mlDetections, ...customDetections];
+          const detected = [...smartDetections, ...customDetections];
           onPIIDetected(detected, newText);
         } catch (err) {
           setError('Error detecting PII: ' + err.message);
@@ -210,17 +199,11 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII }) {
       
       setText(content);
 
-      // Use ML model detection with custom rules
-      let mlDetections = [];
-      if (detectWithML && !modelError) {
-        try {
-          mlDetections = await detectWithML(content);
-        } catch (err) {
-          console.warn('ML detection failed:', err.message);
-        }
-      }
+      // Use unified smart detection: ML (names, orgs, locations) + Regex (email, phone, SSN)
+      const mlFn = detectWithML && !modelError ? detectWithML : null;
+      const smartDetections = await detectSmartPII(content, mlFn);
       const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
-      const detected = [...mlDetections, ...customDetections];
+      const detected = [...smartDetections, ...customDetections];
       
       // Check if aborted
       if (signal.aborted) return;
@@ -339,17 +322,11 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
     
     try {
       setIsProcessing(true);
-      // Use ML model detection with custom rules
-      let mlDetections = [];
-      if (detectWithML && !modelError) {
-        try {
-          mlDetections = await detectWithML(sample);
-        } catch (err) {
-          console.warn('ML detection failed:', err.message);
-        }
-      }
+      // Use unified smart detection pipeline
+      const mlFn = detectWithML && !modelError ? detectWithML : null;
+      const smartDetections = await detectSmartPII(sample, mlFn);
       const customDetections = customRules.length > 0 ? applyCustomRules(sample, customRules) : [];
-      const detected = [...mlDetections, ...customDetections];
+      const detected = [...smartDetections, ...customDetections];
       onPIIDetected(detected, sample, null, 'txt');
     } catch (err) {
       showError('Error detecting PII in sample resume');

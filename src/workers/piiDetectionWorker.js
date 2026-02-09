@@ -55,7 +55,7 @@ function detectNames(text) {
       while ((match = regex.exec(text)) !== null) {
         detections.push({
           type: PII_TYPES.NAME,
-          match: match[0],
+          value: match[0],
           start: match.index,
           end: match.index + match[0].length,
           confidence: 0.95
@@ -73,13 +73,13 @@ function detectNames(text) {
     const actualStart = match.index + (match[0].startsWith('\n') ? 1 : 0);
     
     const isDuplicate = detections.some(d => 
-      d.start === actualStart && d.match === nameMatch
+      d.start === actualStart && d.value === nameMatch
     );
     
     if (!isDuplicate) {
       detections.push({
         type: PII_TYPES.NAME,
-        match: nameMatch,
+        value: nameMatch,
         start: actualStart,
         end: actualStart + nameMatch.length,
         confidence: 0.85
@@ -109,12 +109,12 @@ function detectPIIInWorker(text, customRules = []) {
       detections.push({
         id: `pii-${idCounter++}`,
         type,
-        match: match[0],
+        value: match[0],
         start: match.index,
         end: match.index + match[0].length,
         suggested: PII_REPLACEMENTS[type],
         confidence: 1.0,
-        accepted: true
+        redact: true
       });
     }
   });
@@ -126,7 +126,7 @@ function detectPIIInWorker(text, customRules = []) {
       id: `pii-${idCounter++}`,
       ...detection,
       suggested: PII_REPLACEMENTS[PII_TYPES.NAME],
-      accepted: true
+      redact: true
     });
   });
   
@@ -144,12 +144,12 @@ function detectPIIInWorker(text, customRules = []) {
             id: `pii-${idCounter++}`,
             type: 'CUSTOM',
             customType: rule.name,
-            match: match[0],
+            value: match[0],
             start: match.index,
             end: match.index + match[0].length,
             suggested: rule.replacement || '[REDACTED]',
             confidence: 1.0,
-            accepted: true
+            redact: true
           });
         }
       } catch (e) {
@@ -165,7 +165,7 @@ function detectPIIInWorker(text, customRules = []) {
   const seen = new Set();
   
   detections.forEach(detection => {
-    const key = `${detection.start}-${detection.match}`;
+    const key = `${detection.start}-${detection.value}`;
     if (!seen.has(key)) {
       seen.add(key);
       uniqueDetections.push(detection);

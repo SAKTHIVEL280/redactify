@@ -3,10 +3,10 @@ import PropTypes from 'prop-types';
 import { replacePII, getPIIStats, PII_TYPES } from '../utils/piiDetector';
 import { exportAsTXT, exportAsDOCX, exportAsPDF } from '../utils/exportUtils';
 import { verifyProStatus } from '../utils/proLicenseDB';
-import { showError } from '../utils/toast';
+import { showError, showSuccess } from '../utils/toast';
 import { X } from 'lucide-react';
 
-function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploadedFile, fileType, onClose }) {
+function Sidebar({ piiItems, onTogglePII, onBulkSetPII, originalText, onUpgradeClick, uploadedFile, fileType, onClose }) {
   const [isPro, setIsPro] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -109,6 +109,24 @@ function Sidebar({ piiItems, onTogglePII, originalText, onUpgradeClick, uploaded
           )}
         </div>
       </div>
+
+      {/* Bulk Actions */}
+      {piiItems.length > 0 && onBulkSetPII && (
+        <div className="px-4 py-2 border-b border-white/10 flex items-center gap-2">
+          <button
+            onClick={() => onBulkSetPII(true)}
+            className="flex-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider font-mono bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-800/50 rounded transition-colors"
+          >
+            Redact All
+          </button>
+          <button
+            onClick={() => onBulkSetPII(false)}
+            className="flex-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider font-mono bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700 rounded transition-colors"
+          >
+            Ignore All
+          </button>
+        </div>
+      )}
 
       {/* PII List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -218,6 +236,7 @@ Sidebar.propTypes = {
     end: PropTypes.number.isRequired,
   })).isRequired,
   onTogglePII: PropTypes.func.isRequired,
+  onBulkSetPII: PropTypes.func,
   originalText: PropTypes.string.isRequired,
   onUpgradeClick: PropTypes.func,
   uploadedFile: PropTypes.object,

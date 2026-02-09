@@ -79,6 +79,10 @@ export const storeLicenseInSupabase = async (licenseData) => {
  */
 export const recoverLicenseByPaymentId = async (paymentId) => {
   try {
+    if (!supabase) {
+      return { success: false, error: 'Supabase not configured' };
+    }
+
     const { data, error } = await supabase
       .from('pro_licenses')
       .select('license_key, email, purchased_at, is_active')
@@ -153,6 +157,10 @@ export const recoverLicenseByEmail = async (email) => {
  */
 export const verifyLicenseKey = async (licenseKey) => {
   try {
+    if (!supabase) {
+      return { isValid: false, error: 'Supabase not configured' };
+    }
+
     const { data, error } = await supabase
       .from('pro_licenses')
       .select('is_active, purchased_at')

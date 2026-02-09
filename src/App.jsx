@@ -172,6 +172,13 @@ function App() {
     );
   };
 
+  // Bulk set redact state for all PII items
+  const handleBulkSetPII = (redactValue) => {
+    setDetectedPII(prevPII =>
+      prevPII.map(item => ({ ...item, redact: redactValue }))
+    );
+  };
+
   // Handle Pro upgrade success
   const handleProSuccess = (licenseData) => {
     setIsPro(true);
@@ -359,6 +366,7 @@ function App() {
                   <Sidebar
                     piiItems={detectedPII}
                     onTogglePII={handleTogglePII}
+                    onBulkSetPII={handleBulkSetPII}
                     originalText={originalText}
                     onUpgradeClick={() => setShowProModal(true)}
                     uploadedFile={uploadedFile}

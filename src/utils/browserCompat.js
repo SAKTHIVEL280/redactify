@@ -190,6 +190,60 @@ export const localStorageFallback = {
       console.error('LocalStorage getAllKeys failed:', error);
       return [];
     }
+  },
+
+  // Collection-based methods for IndexedDB fallback
+  add(collectionName, data) {
+    try {
+      const key = `redactify_${collectionName}`;
+      const collection = JSON.parse(localStorage.getItem(key) || '[]');
+      const id = Date.now() + Math.random();
+      const item = { ...data, id };
+      collection.push(item);
+      localStorage.setItem(key, JSON.stringify(collection));
+      return id;
+    } catch (error) {
+      console.error('LocalStorage add failed:', error);
+      return null;
+    }
+  },
+
+  getAll(collectionName) {
+    try {
+      const key = `redactify_${collectionName}`;
+      return JSON.parse(localStorage.getItem(key) || '[]');
+    } catch (error) {
+      console.error('LocalStorage getAll failed:', error);
+      return [];
+    }
+  },
+
+  update(collectionName, id, updates) {
+    try {
+      const key = `redactify_${collectionName}`;
+      const collection = JSON.parse(localStorage.getItem(key) || '[]');
+      const index = collection.findIndex(item => item.id === id);
+      if (index === -1) return false;
+      collection[index] = { ...collection[index], ...updates, id };
+      localStorage.setItem(key, JSON.stringify(collection));
+      return true;
+    } catch (error) {
+      console.error('LocalStorage update failed:', error);
+      return false;
+    }
+  },
+
+  delete(collectionName, id) {
+    try {
+      const key = `redactify_${collectionName}`;
+      const collection = JSON.parse(localStorage.getItem(key) || '[]');
+      const filtered = collection.filter(item => item.id !== id);
+      localStorage.setItem(key, JSON.stringify(filtered));
+      return true;
+    } catch (error) {
+      console.error('LocalStorage delete failed:', error);
+      return false;
+    }
   }
 };
 

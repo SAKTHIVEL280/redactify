@@ -70,8 +70,9 @@ const PATTERNS = {
   // Addresses: Indian and US street patterns
   [PII_TYPES.ADDRESS]: /\b\d+[-/,]?\s*[A-Z][a-z]+(\s+[A-Z][a-z]+){0,3}\s+(Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Place|Pl|Parkway|Pkwy|Nagar|Colony|Extension|Ext|Cross|Main)\b/gi,
   
-  // SSN: US Social Security Numbers (###-##-####, ### ## ####, #########)
-  [PII_TYPES.SSN]: /\b(?!000|666|9\d{2})\d{3}[-\s]?(?!00)\d{2}[-\s]?(?!0000)\d{4}\b/g,
+  // SSN: US Social Security Numbers - require keyword context to avoid false positives
+  // Matches: "SSN: 123-45-6789", "Social Security: 123 45 6789", "SSN 123456789"
+  [PII_TYPES.SSN]: /\b(SSN|Social Security|Social Security Number|SS#)\s*:?\s*(?!000|666|9\d{2})\d{3}[-\s]?(?!00)\d{2}[-\s]?(?!0000)\d{4}\b/gi,
   
   // Credit Cards: Visa, MasterCard, Amex, Discover (with/without spaces/dashes)
   [PII_TYPES.CREDIT_CARD]: /\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4,6}[-\s]?\d{4,5}[-\s]?\d{3,4}\b/g,
@@ -80,8 +81,8 @@ const PATTERNS = {
   // Also catches "DOB:", "Born:", "Birth Date:", "Birthday:"
   [PII_TYPES.DATE_OF_BIRTH]: /\b(DOB|Date of Birth|Born|Birth Date|Birthday)\s*:?\s*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b|\b\d{1,2}[-/](0?[1-9]|1[0-2])[-/](19|20)\d{2}\b/gi,
   
-  // Passport: Various country formats (US: 9 chars, India: 8 chars, UK: 9 chars, etc.)
-  [PII_TYPES.PASSPORT]: /\b(Passport|Passport No|Passport Number)\s*:?\s*[A-Z]{1,2}[0-9]{6,9}\b|\b[A-Z][0-9]{7}\b|\b[A-Z]{2}[0-9]{7}\b/gi,
+  // Passport: Various country formats - require keyword for ambiguous short formats
+  [PII_TYPES.PASSPORT]: /\b(Passport|Passport No|Passport Number)\s*:?\s*[A-Z]{1,2}[0-9]{6,9}\b/gi,
   
   // IP Address: IPv4 and IPv6
   [PII_TYPES.IP_ADDRESS]: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b|\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b/g,
@@ -89,8 +90,8 @@ const PATTERNS = {
   // Bank Account: Various formats (Indian: 9-18 digits, US: 4-17 digits, IBAN)
   [PII_TYPES.BANK_ACCOUNT]: /\b(Account|Account No|Account Number|A\/C|IBAN)\s*:?\s*[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b|\b(Account|Account No|Account Number|A\/C)\s*:?\s*\d{9,18}\b/gi,
   
-  // Tax ID: EIN, TIN, PAN (India), Aadhaar (India)
-  [PII_TYPES.TAX_ID]: /\b(EIN|Tax ID|TIN|PAN|Aadhaar|Aadhar)\s*:?\s*\d{2}[-\s]?\d{7}\b|\b[A-Z]{5}\d{4}[A-Z]\b|\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/gi,
+  // Tax ID: EIN, TIN, PAN (India), Aadhaar (India) - require keyword prefix for numeric-only formats
+  [PII_TYPES.TAX_ID]: /\b(EIN|Tax ID|TIN)\s*:?\s*\d{2}[-\s]?\d{7}\b|\b[A-Z]{5}\d{4}[A-Z]\b|\b(Aadhaar|Aadhar|UID)\s*:?\s*\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/gi,
   
   // Age: Explicit age mentions (Age: 25, 25 years old, etc.)
   [PII_TYPES.AGE]: /\b(Age|age)\s*:?\s*\d{1,3}\b|\b\d{1,3}\s+years?\s+old\b/gi
@@ -820,17 +821,4 @@ export function getPIIStats(piiItems) {
   return stats;
 }
 
-/**
- * Export redacted document as text file
- */
-export function exportAsText(content, filename = 'redacted-resume.txt') {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
+

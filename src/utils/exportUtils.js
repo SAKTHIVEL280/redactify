@@ -67,99 +67,118 @@ export const exportAsDOCX = async (text, originalFilename = null, originalFile =
       filename = `${nameWithoutExt}_redacted.docx`;
     }
     
-    // If original file is a DOCX, preserve ALL formatting by carefully replacing text
+    // If original file is a DOCX, preserve ALL formatting by replacing text in-place
     if (originalFile && originalFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       try {
         const JSZip = (await import('jszip')).default;
         const arrayBuffer = await originalFile.arrayBuffer();
         const zip = await JSZip.loadAsync(arrayBuffer);
         
-        // Read document.xml
-        const documentXML = await zip.file('word/document.xml').async('string');
-        
-        // Parse XML
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(documentXML, 'text/xml');
-        
-        // Get namespace for Word elements
-        const wNamespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-        
-        // Strategy: Build character-to-node mapping, then replace text while keeping structure
-        const textNodes = [];
-        let currentPosition = 0;
-        
-        // Find all w:t text nodes and map their positions
-        const getAllTextNodes = (element) => {
-          const tElements = element.getElementsByTagNameNS(wNamespace, 't');
+        // Process document.xml and any headers/footers
+        const xmlFiles = ['word/document.xml'];
+        // Also check for headers and footers
+        const zipFiles = Object.keys(zip.files);
+        zipFiles.forEach(f => {
+          if (/^word\/(header|footer)\d+\.xml$/.test(f)) {
+            xmlFiles.push(f);
+          }
+        });
+
+        for (const xmlPath of xmlFiles) {
+          const xmlFile = zip.file(xmlPath);
+          if (!xmlFile) continue;
+          
+          const xmlContent = await xmlFile.async('string');
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+          const wNamespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+          
+          // Build position-to-node mapping
+          const textNodes = [];
+          let currentPosition = 0;
+          const tElements = xmlDoc.getElementsByTagNameNS(wNamespace, 't');
+          
           for (let i = 0; i < tElements.length; i++) {
             const node = tElements[i];
             const nodeText = node.textContent;
             textNodes.push({
-              node: node,
-              startPos: currentPosition,
-              endPos: currentPosition + nodeText.length,
+              node,
+              start: currentPosition,
+              end: currentPosition + nodeText.length,
               originalText: nodeText
             });
             currentPosition += nodeText.length;
           }
-        };
-        
-        getAllTextNodes(xmlDoc);
-        
-        // Build original text from nodes
-        const originalText = textNodes.map(n => n.originalText).join('');
-        
-        // The 'text' parameter is already redacted, we need to map it back
-        // Problem: redacted text may have different length than original
-        
-        // Better approach: Use character-by-character mapping
-        // Create a mapping of which characters to keep/replace
-        const charMap = new Array(originalText.length).fill(null).map((_, i) => originalText[i]);
-        
-        // If we have PII items, replace them in the character map
-        if (piiItems && piiItems.length > 0) {
-          const sortedPII = [...piiItems].filter(p => p.redact).sort((a, b) => b.start - a.start);
           
-          for (const pii of sortedPII) {
-            const replacement = pii.suggested || `[${pii.type.toUpperCase()} REDACTED]`;
-            // Replace in charMap
-            const before = charMap.slice(0, pii.start);
-            const after = charMap.slice(pii.end);
-            charMap.splice(0, charMap.length, ...before, ...replacement.split(''), ...after);
+          // Apply PII replacements from end to start (preserves earlier positions)
+          if (piiItems && piiItems.length > 0) {
+            const piiToRedact = [...piiItems]
+              .filter(p => p.redact)
+              .sort((a, b) => b.start - a.start);
+            
+            for (const pii of piiToRedact) {
+              const replacement = pii.suggested || `[${pii.type.toUpperCase()} REDACTED]`;
+              
+              // Find which text nodes this PII spans
+              const affectedNodes = textNodes.filter(n => 
+                n.start < pii.end && n.end > pii.start
+              );
+              
+              if (affectedNodes.length === 0) continue;
+              
+              if (affectedNodes.length === 1) {
+                // PII is within a single node - simple in-place replacement
+                const node = affectedNodes[0];
+                const startInNode = pii.start - node.start;
+                const endInNode = pii.end - node.start;
+                const currentText = node.node.textContent;
+                node.node.textContent = 
+                  currentText.substring(0, startInNode) + 
+                  replacement + 
+                  currentText.substring(endInNode);
+                
+                // Preserve xml:space for spaces
+                node.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+              } else {
+                // PII spans multiple nodes
+                const firstNode = affectedNodes[0];
+                const lastNode = affectedNodes[affectedNodes.length - 1];
+                
+                // First node: keep text before PII + add replacement
+                const startInFirst = pii.start - firstNode.start;
+                firstNode.node.textContent = 
+                  firstNode.node.textContent.substring(0, startInFirst) + replacement;
+                firstNode.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+                
+                // Middle nodes: clear content
+                for (let i = 1; i < affectedNodes.length - 1; i++) {
+                  affectedNodes[i].node.textContent = '';
+                }
+                
+                // Last node: keep text after PII
+                const endInLast = pii.end - lastNode.start;
+                lastNode.node.textContent = lastNode.node.textContent.substring(endInLast);
+                if (lastNode.node.textContent) {
+                  lastNode.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+                }
+              }
+            }
           }
-        }
-        
-        // Now map the character array back to text nodes
-        const newText = charMap.join('');
-        let textIndex = 0;
-        
-        for (const nodeInfo of textNodes) {
-          const nodeLength = nodeInfo.endPos - nodeInfo.startPos;
-          const newNodeText = newText.substring(textIndex, textIndex + nodeLength);
-          nodeInfo.node.textContent = newNodeText;
           
-          // Preserve xml:space attribute for leading/trailing spaces
-          if (newNodeText.startsWith(' ') || newNodeText.endsWith(' ') || /\s{2,}/.test(newNodeText)) {
-            nodeInfo.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+          // Serialize back
+          const serializer = new XMLSerializer();
+          let modifiedXML = serializer.serializeToString(xmlDoc);
+          
+          // Fix namespace declarations if needed
+          if (!modifiedXML.includes('xmlns:w=') && xmlPath === 'word/document.xml') {
+            modifiedXML = modifiedXML.replace(
+              '<w:document',
+              '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+            );
           }
           
-          textIndex += nodeLength;
+          zip.file(xmlPath, modifiedXML);
         }
-        
-        // Serialize back
-        const serializer = new XMLSerializer();
-        let modifiedXML = serializer.serializeToString(xmlDoc);
-        
-        // Fix namespace declarations if needed
-        if (!modifiedXML.includes('xmlns:w=')) {
-          modifiedXML = modifiedXML.replace(
-            '<w:document',
-            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-          );
-        }
-        
-        // Update ZIP
-        zip.file('word/document.xml', modifiedXML);
         
         // Generate DOCX
         const blob = await zip.generateAsync({ type: 'blob' });
@@ -174,7 +193,6 @@ export const exportAsDOCX = async (text, originalFilename = null, originalFile =
         return { success: true, preservedFormat: true };
       } catch (formatError) {
         console.error('Failed to preserve DOCX format:', formatError);
-        console.log('Error details:', formatError.message);
         // Fall through to plain text export
       }
     }
@@ -213,7 +231,7 @@ export const exportAsDOCX = async (text, originalFilename = null, originalFile =
   }
 };
 
-// Export as PDF (Pro tier only)
+// Export as PDF (Pro tier only) — preserves original PDF layout when possible
 export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPro = false, originalFilename = null) => {
   try {
     // Generate filename from original or use default
@@ -222,8 +240,143 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
       const nameWithoutExt = originalFilename.replace(/\.[^/.]+$/, '');
       filename = `${nameWithoutExt}_redacted.pdf`;
     }
+
+    // If original file is a PDF, preserve formatting by overlaying redaction boxes
+    if (uploadedFile && uploadedFile.type === 'application/pdf' && piiItems.length > 0) {
+      try {
+        const arrayBuffer = await uploadedFile.arrayBuffer();
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        
+        // Load with pdfjs to get text positions
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
+        const pdfDoc = await loadingTask.promise;
+        
+        // Load with pdf-lib to modify
+        const pdfLibDoc = await PDFDocument.load(arrayBuffer);
+        const timesFont = await pdfLibDoc.embedFont(StandardFonts.Helvetica);
+        
+        // Build a global text position map page by page
+        let globalOffset = 0;
+        
+        for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+          const page = await pdfDoc.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const viewport = page.getViewport({ scale: 1.0 });
+          
+          // Sort items the same way as extractTextFromPDF
+          textContent.items.sort((a, b) => {
+            const aY = a.transform[5];
+            const bY = b.transform[5];
+            const aX = a.transform[4];
+            const bX = b.transform[4];
+            if (Math.abs(bY - aY) <= 5) return aX - bX;
+            return bY - aY;
+          });
+          
+          // Build position map for this page
+          const pageItems = [];
+          let lastY = null;
+          
+          textContent.items.forEach((item, index) => {
+            const currentY = item.transform[5];
+            
+            // Account for newlines
+            if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+              globalOffset += 1; // newline character
+            }
+            
+            const itemStart = globalOffset;
+            const itemEnd = globalOffset + item.str.length;
+            
+            pageItems.push({
+              str: item.str,
+              start: itemStart,
+              end: itemEnd,
+              x: item.transform[4],
+              y: item.transform[5],
+              width: item.width,
+              height: item.height || (item.transform[0] || 12),
+              fontSize: item.transform[0] || 12
+            });
+            
+            globalOffset += item.str.length;
+            
+            // Account for space between items on same line
+            if (index < textContent.items.length - 1) {
+              const nextItem = textContent.items[index + 1];
+              const nextY = nextItem.transform[5];
+              if (Math.abs(currentY - nextY) <= 5) {
+                globalOffset += 1; // space
+              }
+            }
+            
+            lastY = currentY;
+          });
+          
+          globalOffset += 2; // paragraph break between pages
+          
+          // Find PIIs that fall on this page
+          const pdfPage = pdfLibDoc.getPage(pageNum - 1);
+          const pageHeight = pdfPage.getHeight();
+          
+          const piiToRedact = piiItems.filter(p => p.redact);
+          
+          for (const pii of piiToRedact) {
+            // Find page items that overlap with this PII
+            const overlapping = pageItems.filter(item => 
+              item.start < pii.end && item.end > pii.start
+            );
+            
+            if (overlapping.length === 0) continue;
+            
+            // Draw white rectangle over each overlapping text item
+            for (const item of overlapping) {
+              const padding = 2;
+              pdfPage.drawRectangle({
+                x: item.x - padding,
+                y: item.y - padding,
+                width: (item.width || 100) + padding * 2,
+                height: item.height + padding * 2,
+                color: rgb(1, 1, 1), // white
+                opacity: 1,
+              });
+            }
+            
+            // Draw replacement text at the first overlapping item's position
+            const firstItem = overlapping[0];
+            const replacement = pii.suggested || `[REDACTED]`;
+            const replaceFontSize = Math.min(firstItem.fontSize * 0.9, 10);
+            
+            pdfPage.drawText(replacement, {
+              x: firstItem.x,
+              y: firstItem.y,
+              size: replaceFontSize,
+              font: timesFont,
+              color: rgb(0.6, 0, 0) // dark red for redacted text
+            });
+          }
+        }
+        
+        const pdfBytes = await pdfLibDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        let link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+        
+        return { success: true, preservedFormat: true };
+      } catch (pdfError) {
+        console.error('Failed to preserve PDF format, falling back:', pdfError);
+        // Fall through to plain text PDF generation
+      }
+    }
     
-    // Sanitize text to remove unsupported Unicode characters
+    // Fallback: create new PDF from plain text
     const sanitizedText = sanitizeForPDF(text);
     
     const pdfDoc = await PDFDocument.create();

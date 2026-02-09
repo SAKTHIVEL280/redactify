@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { X, Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, ChevronRight } from 'lucide-react';
-import { detectPII, extractTextFromInput, replacePII, highlightPII, PII_COLORS } from '../utils/piiDetector';
+import { extractTextFromInput, replacePII, highlightPII, PII_COLORS } from '../utils/piiDetector';
+import { detectSmartPII } from '../utils/smartDetection';
 import { getEnabledCustomRules } from '../utils/customRulesDB';
 import { exportBatchAsZip } from '../utils/batchExportUtils';
 
@@ -64,8 +65,41 @@ export default function BatchProcessor({ isOpen, onClose }) {
         // Extract text from file
         const text = await extractTextFromInput(file.file);
         
-        // Detect PII with custom rules
-        const detected = detectPII(text, customRules);
+        // Detect PII with smart detection (regex + context filtering, no ML in batch mode)
+        const detected = await detectSmartPII(text, null);
+
+        // Apply custom rules on top of smart detections
+        if (customRules && customRules.length > 0) {
+          let idCounter = detected.length;
+          customRules.forEach(rule => {
+            if (!rule.enabled) return;
+            try {
+              const regex = new RegExp(rule.pattern, 'g');
+              let match;
+              while ((match = regex.exec(text)) !== null) {
+                // Skip if overlapping with existing detection
+                const overlaps = detected.some(d => 
+                  match.index < d.end && (match.index + match[0].length) > d.start
+                );
+                if (!overlaps) {
+                  detected.push({
+                    id: `custom-${idCounter++}`,
+                    type: 'CUSTOM',
+                    customType: rule.name,
+                    value: match[0],
+                    start: match.index,
+                    end: match.index + match[0].length,
+                    suggested: rule.replacement || '[REDACTED]',
+                    confidence: 1.0,
+                    redact: true
+                  });
+                }
+              }
+            } catch (e) {
+              console.warn(`Invalid custom rule: ${rule.name}`, e);
+            }
+          });
+        }
         
         setFiles(prev => prev.map(f => 
           f.id === file.id 
