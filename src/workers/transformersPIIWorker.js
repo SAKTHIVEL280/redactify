@@ -68,14 +68,34 @@ async function initializeModel() {
     // Setup cache
     await cacheModelFiles();
 
+    // Track per-file progress for accurate overall percentage
+    const fileProgress = {};
+    let totalFiles = 0;
+
     // Create pipeline with progress callback
     nerPipeline = await pipeline('token-classification', MODEL_NAME, {
       quantized: true,
-      progress_callback: (progress) => {
-        const percentage = Math.round((progress.loaded / progress.total) * 100);
+      progress_callback: (data) => {
+        if (!data || !data.file) return;
+
+        if (data.status === 'initiate') {
+          totalFiles++;
+          fileProgress[data.file] = 0;
+        } else if (data.status === 'progress' && typeof data.progress === 'number') {
+          fileProgress[data.file] = data.progress;
+        } else if (data.status === 'done') {
+          fileProgress[data.file] = 100;
+        }
+
+        // Calculate overall progress across all files
+        const files = Object.values(fileProgress);
+        const overall = files.length > 0
+          ? Math.round(files.reduce((a, b) => a + b, 0) / Math.max(totalFiles, files.length))
+          : 0;
+
         self.postMessage({ 
           type: 'MODEL_LOADING', 
-          progress: percentage 
+          progress: overall 
         });
       }
     });

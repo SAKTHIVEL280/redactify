@@ -46,6 +46,8 @@ export function useTransformersPII() {
             setIsModelLoaded(true);
             setIsModelLoading(false);
             setLoadingProgress(100);
+            // Persist cache flag for quick checks
+            try { localStorage.setItem('ml_model_cached', 'true'); } catch {}
             break;
 
           case 'MODEL_ERROR':
@@ -105,6 +107,7 @@ export function useTransformersPII() {
 
   /**
    * Detect PII using Transformers.js NER model
+   * Returns empty array gracefully if model isn't ready yet (still loading from cache)
    * @param {string} text - Text to analyze
    * @returns {Promise<Array>} Array of detected entities
    */
@@ -114,11 +117,11 @@ export function useTransformersPII() {
     }
 
     if (!workerRef.current) {
-      throw new Error('Worker not initialized');
+      return []; // Worker not ready, fall back to regex
     }
 
     if (!isModelLoaded) {
-      throw new Error('Model not loaded yet. Please wait.');
+      return []; // Model still loading (from cache or download), regex handles this round
     }
 
     return new Promise((resolve, reject) => {
@@ -143,17 +146,32 @@ export function useTransformersPII() {
 
   /**
    * Check if model is cached
+   * Transformers.js stores files in OPFS or Cache API under its own naming
    * @returns {Promise<boolean>}
    */
   const isModelCached = useCallback(async () => {
-    if (!('caches' in window)) return false;
+    // Method 1: Check Cache API for Transformers.js cached files
+    if ('caches' in window) {
+      try {
+        const cacheNames = await caches.keys();
+        // Transformers.js uses cache names containing 'transformers'
+        const tfCache = cacheNames.find(name => name.includes('transformers'));
+        if (tfCache) {
+          const cache = await caches.open(tfCache);
+          const keys = await cache.keys();
+          // Check if any cached URL references our model
+          const hasModel = keys.some(req => req.url.includes('bert-base-NER'));
+          if (hasModel) return true;
+        }
+      } catch (e) {
+        // Fall through to other checks
+      }
+    }
 
+    // Method 2: Check localStorage flag (set after successful load)
     try {
-      const cache = await caches.open(CACHE_NAME);
-      const cachedResponse = await cache.match(MODEL_CACHE_KEY);
-      return !!cachedResponse;
-    } catch (error) {
-      console.warn('Cache check failed:', error);
+      return localStorage.getItem('ml_model_cached') === 'true';
+    } catch {
       return false;
     }
   }, []);
@@ -171,11 +189,17 @@ export function useTransformersPII() {
    * Clear cached model (for debugging/updates)
    */
   const clearModelCache = useCallback(async () => {
+    try { localStorage.removeItem('ml_model_cached'); } catch {}
+
     if (!('caches' in window)) return;
 
     try {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.delete(MODEL_CACHE_KEY);
+      const cacheNames = await caches.keys();
+      for (const name of cacheNames) {
+        if (name.includes('transformers')) {
+          await caches.delete(name);
+        }
+      }
       setIsModelLoaded(false);
       setLoadingProgress(0);
     } catch (error) {
@@ -187,8 +211,8 @@ export function useTransformersPII() {
     detectPII,
     isModelLoaded,
     isModelLoading,
-    loadingProgress,
-    error,
+    modelProgress: loadingProgress,
+    modelError: error,
     isModelCached,
     initModel,
     clearModelCache

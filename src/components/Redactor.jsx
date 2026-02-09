@@ -18,7 +18,10 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
   const [customRules, setCustomRules] = useState([]);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileType, setFileType] = useState(null);
-  const [showModelNotice, setShowModelNotice] = useState(false);
+  const [showModelNotice, setShowModelNotice] = useState(() => {
+    try { return !localStorage.getItem('modelNoticeDismissed'); }
+    catch { return true; }
+  });
   const [modelCached, setModelCached] = useState(false);
   const abortControllerRef = React.useRef(null);
   const debounceTimerRef = React.useRef(null);
@@ -34,19 +37,15 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
     initModel
   } = useTransformersPII();
 
-  // Check if model is cached on mount
+  // Check if model is cached on mount, always init model
   useEffect(() => {
-    const checkCache = async () => {
+    const init = async () => {
       const cached = await checkModelCached();
       setModelCached(cached);
-      
-      if (!cached) {
-        // Auto-start download when entering redactor page
-        console.log('[REDACTOR] Model not cached, starting download...');
-        initModel();
-      }
+      // Always init — if cached, loads from cache in <1s; if not, downloads
+      initModel();
     };
-    checkCache();
+    init();
   }, [checkModelCached, initModel]);
 
   // Load custom rules on mount and when isPro changes
@@ -338,8 +337,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
 
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
-      {/* AI Model Loading Overlay - Clean Dark Theme */}
-      {isModelLoading && (
+      {/* AI Model Loading Overlay - only for fresh downloads (not cached) */}
+      {isModelLoading && !modelCached && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-zinc-900 border border-white/10 rounded-2xl p-8 shadow-2xl">
             {/* Icon */}
@@ -364,8 +363,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                 />
               </div>
               <div className="flex justify-between items-center">
-                <p className="text-xs text-zinc-500 font-mono">{Math.round(modelProgress)}%</p>
-                <p className="text-xs text-zinc-500">Initializing...</p>
+                <p className="text-xs text-zinc-500 font-mono">{Math.round(modelProgress || 0)}%</p>
+                <p className="text-xs text-zinc-500">Downloading...</p>
               </div>
             </div>
           </div>
