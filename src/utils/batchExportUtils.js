@@ -75,43 +75,63 @@ async function generatePDFBytes(text) {
   const sanitizedText = sanitizeForPDF(text);
   
   const pdfDoc = await PDFDocument.create();
-  const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   
-  const fontSize = 11;
+  const bodySize = 10;
+  const headingSize = 12;
+  const nameSize = 14;
   const margin = 50;
   const pageWidth = 595;
   const pageHeight = 842;
   const maxWidth = pageWidth - 2 * margin;
-  const lineHeight = fontSize * 1.2;
+  const bodyLH = bodySize * 1.5;
+  const headingLH = headingSize * 1.8;
+  const nameLH = nameSize * 1.6;
+
+  const SECTION_RE =
+    /^(EDUCATION|EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EMPLOYMENT HISTORY|SKILLS|TECHNICAL SKILLS|CORE SKILLS|KEY SKILLS|CORE COMPETENCIES|PROJECTS|KEY PROJECTS|CERTIFICATIONS|AWARDS|ACHIEVEMENTS|SUMMARY|PROFESSIONAL SUMMARY|CAREER SUMMARY|OBJECTIVE|CAREER OBJECTIVE|PROFILE|PROFESSIONAL PROFILE|REFERENCES|CONTACT|PUBLICATIONS|LANGUAGES|INTERESTS|HOBBIES|TRAINING|ACTIVITIES)$/i;
   
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
-  let yPosition = pageHeight - margin;
+  let y = pageHeight - margin;
   
   const lines = sanitizedText.split('\n');
   
-  for (const line of lines) {
-    const words = line.split(' ');
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+
+    if (!trimmed) {
+      y -= bodyLH * 0.5;
+      if (y < margin + bodyLH) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - margin; }
+      continue;
+    }
+
+    const isSection =
+      SECTION_RE.test(trimmed) ||
+      (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && trimmed.length < 50 &&
+        /[A-Z]/.test(trimmed) && !trimmed.includes('['));
+
+    const isFirstLine =
+      i === lines.slice(0, i + 1).findIndex((l) => l.trim()) &&
+      !trimmed.includes('@') && !trimmed.includes('://');
+
+    let font, size, lh;
+    if (isFirstLine) { font = fontBold; size = nameSize; lh = nameLH; }
+    else if (isSection) {
+      font = fontBold; size = headingSize; lh = headingLH;
+      y -= 8;
+      if (y < margin + lh) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - margin; }
+    } else { font = fontRegular; size = bodySize; lh = bodyLH; }
+
+    const words = trimmed.split(' ');
     let currentLine = '';
     
     for (const word of words) {
       const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const testWidth = timesRomanFont.widthOfTextAtSize(testLine, fontSize);
-      
-      if (testWidth > maxWidth && currentLine) {
-        if (yPosition < margin + lineHeight) {
-          page = pdfDoc.addPage([pageWidth, pageHeight]);
-          yPosition = pageHeight - margin;
-        }
-        
-        page.drawText(currentLine, {
-          x: margin,
-          y: yPosition,
-          size: fontSize,
-          font: timesRomanFont,
-          color: rgb(0, 0, 0)
-        });
-        
-        yPosition -= lineHeight;
+      if (font.widthOfTextAtSize(testLine, size) > maxWidth && currentLine) {
+        if (y < margin + lh) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - margin; }
+        page.drawText(currentLine, { x: margin, y, size, font, color: rgb(0.1, 0.1, 0.1) });
+        y -= lh;
         currentLine = word;
       } else {
         currentLine = testLine;
@@ -119,24 +139,19 @@ async function generatePDFBytes(text) {
     }
     
     if (currentLine) {
-      if (yPosition < margin + lineHeight) {
-        page = pdfDoc.addPage([pageWidth, pageHeight]);
-        yPosition = pageHeight - margin;
-      }
-      
-      page.drawText(currentLine, {
-        x: margin,
-        y: yPosition,
-        size: fontSize,
-        font: timesRomanFont,
-        color: rgb(0, 0, 0)
-      });
-      
-      yPosition -= lineHeight;
+      if (y < margin + lh) { page = pdfDoc.addPage([pageWidth, pageHeight]); y = pageHeight - margin; }
+      page.drawText(currentLine, { x: margin, y, size, font, color: rgb(0.1, 0.1, 0.1) });
+      y -= lh;
     }
-    
-    if (!line.trim()) {
-      yPosition -= lineHeight / 2;
+
+    if (isSection) {
+      page.drawLine({
+        start: { x: margin, y: y + lh * 0.3 },
+        end: { x: pageWidth - margin, y: y + lh * 0.3 },
+        thickness: 0.5,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+      y -= 4;
     }
   }
   

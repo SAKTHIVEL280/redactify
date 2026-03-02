@@ -1,502 +1,552 @@
-import { Document, Packer, Paragraph, TextRun } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, BorderStyle } from 'docx';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────────
+
 /**
- * Sanitize text for PDF export by replacing unsupported Unicode characters
+ * Sanitize text for PDF export — pdf-lib only supports WinAnsi (Latin-1).
  */
 function sanitizeForPDF(text) {
   if (!text) return '';
-  
-  // First normalize line endings (remove \r)
-  let sanitized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  
-  // Then replace other unsupported characters
-  sanitized = sanitized
-    .replace(/→/g, '->')  // Arrow
+  let s = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  s = s
+    .replace(/→/g, '->')
     .replace(/←/g, '<-')
     .replace(/↑/g, '^')
     .replace(/↓/g, 'v')
-    .replace(/—/g, '-')   // Em dash
-    .replace(/–/g, '-')   // En dash
-    .replace(/'/g, "'")   // Smart quotes
-    .replace(/'/g, "'")
-    .replace(/"/g, '"')
-    .replace(/"/g, '"')
-    .replace(/…/g, '...')  // Ellipsis
-    .replace(/•/g, '*')   // Bullet
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Remove control characters except \n and \t
-    .replace(/[^\x00-\xFF]/g, '?'); // Replace any other non-Latin1 characters
-  
-  return sanitized;
+    .replace(/—/g, '-')
+    .replace(/–/g, '-')
+    .replace(/\u2018/g, "'")
+    .replace(/\u2019/g, "'")
+    .replace(/\u201C/g, '"')
+    .replace(/\u201D/g, '"')
+    .replace(/\u2026/g, '...')
+    .replace(/\u2022/g, '*')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .replace(/[^\x00-\xFF]/g, '?');
+  return s;
 }
 
-// Export as TXT (Free tier)
+/** Trigger download of a Blob. */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  URL.revokeObjectURL(url);
+  document.body.removeChild(link);
+}
+
+/** Build redacted filename from original. */
+function makeFilename(originalFilename, ext) {
+  if (originalFilename) {
+    const base = originalFilename.replace(/\.[^/.]+$/, '');
+    return `${base}_redacted.${ext}`;
+  }
+  return `redacted-document.${ext}`;
+}
+
+/** Section-header pattern for resume formatting detection. */
+const SECTION_RE =
+  /^(EDUCATION|EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EMPLOYMENT HISTORY|SKILLS|TECHNICAL SKILLS|CORE SKILLS|KEY SKILLS|CORE COMPETENCIES|PROJECTS|KEY PROJECTS|CERTIFICATIONS|PROFESSIONAL CERTIFICATIONS|AWARDS|ACHIEVEMENTS|HONORS|SUMMARY|PROFESSIONAL SUMMARY|CAREER SUMMARY|EXECUTIVE SUMMARY|OBJECTIVE|CAREER OBJECTIVE|PROFILE|PROFESSIONAL PROFILE|REFERENCES|CONTACT|CONTACT INFORMATION|PUBLICATIONS|RESEARCH|LANGUAGES|INTERESTS|HOBBIES|TRAINING|ACTIVITIES|VOLUNTEER|LEADERSHIP|ACADEMIC BACKGROUND|EDUCATIONAL BACKGROUND)$/i;
+
+// ─── TXT Export ──────────────────────────────────────────────────────────────────
+
 export const exportAsTXT = (text, originalFilename = null) => {
-  let link = null;
   try {
-    // Generate filename from original or use default
-    let filename = 'redacted-resume.txt';
-    if (originalFilename) {
-      const nameWithoutExt = originalFilename.replace(/\.[^/.]+$/, '');
-      filename = `${nameWithoutExt}_redacted.txt`;
-    }
-    
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    URL.revokeObjectURL(url);
-    
+    const filename = makeFilename(originalFilename, 'txt');
+    downloadBlob(new Blob([text], { type: 'text/plain' }), filename);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
-  } finally {
-    if (link && link.parentNode) {
-      document.body.removeChild(link);
-    }
   }
 };
 
-// Export as DOCX (Pro tier only)
-export const exportAsDOCX = async (text, originalFilename = null, originalFile = null, piiItems = []) => {
-  let link = null;
-  try {
-    // Generate filename from original or use default
-    let filename = 'redacted-resume.docx';
-    if (originalFilename) {
-      const nameWithoutExt = originalFilename.replace(/\.[^/.]+$/, '');
-      filename = `${nameWithoutExt}_redacted.docx`;
+// ─── DOCX Export ─────────────────────────────────────────────────────────────────
+
+/**
+ * Apply redactions to OOXML using VALUE-BASED SEARCH.
+ *
+ * Why value-based instead of position-based:
+ *   mammoth.extractRawText() inserts \n\n between paragraphs, producing text
+ *   positions that diverge from the raw <w:t> concatenation. After a few
+ *   paragraphs the offset drift is large enough that position-based replacement
+ *   either replaces the wrong text or throws, causing the export to fall back to
+ *   a plain-text DOCX — losing ALL formatting.
+ *
+ *   Value-based search finds each PII value as a substring of the XML text and
+ *   replaces it in-place, regardless of paragraph offset differences.
+ *
+ * Edge-case handling:
+ *   • Longer values are processed first to prevent partial-match conflicts.
+ *   • Multi-run spans (value split across <w:t> elements) are handled.
+ *   • If only some occurrences of a value should be redacted, we cap replacements.
+ *   • Overlapping ranges are skipped to avoid double-replacement.
+ */
+function applyRedactionsToXML(xmlDoc, piiItems) {
+  const wNS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const allTNodes = Array.from(xmlDoc.getElementsByTagNameNS(wNS, 't'));
+  if (allTNodes.length === 0) return;
+
+  // 1) Build concatenated text from every <w:t> element, with a position map.
+  let xmlText = '';
+  const nodeMap = allTNodes.map((node) => {
+    const text = node.textContent;
+    const entry = { node, start: xmlText.length, end: xmlText.length + text.length };
+    xmlText += text;
+    return entry;
+  });
+
+  // 2) Group PII items by value.
+  const valueGroups = new Map(); // value → { replacement, redactCount, totalCount }
+  piiItems.forEach((p) => {
+    if (!p.value || p.value.length === 0) return;
+    if (!valueGroups.has(p.value)) {
+      valueGroups.set(p.value, { replacement: p.suggested || '[REDACTED]', redactCount: 0, totalCount: 0 });
     }
-    
-    // If original file is a DOCX, preserve ALL formatting by replacing text in-place
-    if (originalFile && originalFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    const g = valueGroups.get(p.value);
+    g.totalCount++;
+    if (p.redact) g.redactCount++;
+  });
+
+  // 3) Collect replacement ranges — process longer values first.
+  const sortedValues = [...valueGroups.entries()]
+    .filter(([, g]) => g.redactCount > 0)
+    .sort((a, b) => b[0].length - a[0].length);
+
+  const replacements = []; // { xmlStart, xmlEnd, replacement }
+  const usedRanges = [];
+
+  for (const [value, { replacement, redactCount, totalCount }] of sortedValues) {
+    const occurrences = [];
+    let searchFrom = 0;
+    while (searchFrom <= xmlText.length - value.length) {
+      const idx = xmlText.indexOf(value, searchFrom);
+      if (idx === -1) break;
+      occurrences.push(idx);
+      searchFrom = idx + value.length;
+    }
+    if (occurrences.length === 0) continue;
+
+    const redactAll = redactCount >= totalCount || occurrences.length <= redactCount;
+    const limit = redactAll ? occurrences.length : redactCount;
+
+    let replaced = 0;
+    for (const idx of occurrences) {
+      if (replaced >= limit) break;
+      const end = idx + value.length;
+      if (usedRanges.some((r) => r.start < end && r.end > idx)) continue;
+      replacements.push({ xmlStart: idx, xmlEnd: end, replacement });
+      usedRanges.push({ start: idx, end });
+      replaced++;
+    }
+  }
+
+  if (replacements.length === 0) return;
+
+  // 4) Group replacements by the <w:t> nodes they touch.
+  const nodeActions = new Map();
+
+  for (const r of replacements) {
+    const affected = nodeMap.filter((n) => n.start < r.xmlEnd && n.end > r.xmlStart);
+    if (affected.length === 0) continue;
+
+    affected.forEach((n, idx) => {
+      if (!nodeActions.has(n.node)) nodeActions.set(n.node, []);
+      nodeActions.get(n.node).push({
+        startInNode: Math.max(0, r.xmlStart - n.start),
+        endInNode: Math.min(n.end - n.start, r.xmlEnd - n.start),
+        replacement: idx === 0 ? r.replacement : '',
+      });
+    });
+  }
+
+  // 5) Apply edits right-to-left within each node.
+  for (const [node, actions] of nodeActions) {
+    actions.sort((a, b) => b.startInNode - a.startInNode);
+    let text = node.textContent;
+    for (const a of actions) {
+      text = text.substring(0, a.startInNode) + a.replacement + text.substring(a.endInNode);
+    }
+    node.textContent = text;
+    node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+  }
+}
+
+/**
+ * Export as DOCX — preserves ALL original formatting when the source is DOCX.
+ */
+export const exportAsDOCX = async (text, originalFilename = null, originalFile = null, piiItems = []) => {
+  try {
+    const filename = makeFilename(originalFilename, 'docx');
+
+    // ── Strategy 1: Format-preserving in-place edit ────────────────────────
+    if (
+      originalFile &&
+      originalFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
       try {
         const JSZip = (await import('jszip')).default;
         const arrayBuffer = await originalFile.arrayBuffer();
         const zip = await JSZip.loadAsync(arrayBuffer);
-        
-        // Process document.xml and any headers/footers
+
         const xmlFiles = ['word/document.xml'];
-        // Also check for headers and footers
-        const zipFiles = Object.keys(zip.files);
-        zipFiles.forEach(f => {
-          if (/^word\/(header|footer)\d+\.xml$/.test(f)) {
-            xmlFiles.push(f);
-          }
+        Object.keys(zip.files).forEach((f) => {
+          if (/^word\/(header|footer)\d+\.xml$/.test(f)) xmlFiles.push(f);
         });
 
         for (const xmlPath of xmlFiles) {
           const xmlFile = zip.file(xmlPath);
           if (!xmlFile) continue;
-          
+
           const xmlContent = await xmlFile.async('string');
           const parser = new DOMParser();
           const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-          const wNamespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-          
-          // Build position-to-node mapping
-          const textNodes = [];
-          let currentPosition = 0;
-          const tElements = xmlDoc.getElementsByTagNameNS(wNamespace, 't');
-          
-          for (let i = 0; i < tElements.length; i++) {
-            const node = tElements[i];
-            const nodeText = node.textContent;
-            textNodes.push({
-              node,
-              start: currentPosition,
-              end: currentPosition + nodeText.length,
-              originalText: nodeText
-            });
-            currentPosition += nodeText.length;
+
+          if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+            console.warn(`XML parse error in ${xmlPath}, skipping`);
+            continue;
           }
-          
-          // Apply PII replacements from end to start (preserves earlier positions)
-          if (piiItems && piiItems.length > 0) {
-            const piiToRedact = [...piiItems]
-              .filter(p => p.redact)
-              .sort((a, b) => b.start - a.start);
-            
-            for (const pii of piiToRedact) {
-              const replacement = pii.suggested || `[${pii.type.toUpperCase()} REDACTED]`;
-              
-              // Find which text nodes this PII spans
-              const affectedNodes = textNodes.filter(n => 
-                n.start < pii.end && n.end > pii.start
-              );
-              
-              if (affectedNodes.length === 0) continue;
-              
-              if (affectedNodes.length === 1) {
-                // PII is within a single node - simple in-place replacement
-                const node = affectedNodes[0];
-                const startInNode = pii.start - node.start;
-                const endInNode = pii.end - node.start;
-                const currentText = node.node.textContent;
-                node.node.textContent = 
-                  currentText.substring(0, startInNode) + 
-                  replacement + 
-                  currentText.substring(endInNode);
-                
-                // Preserve xml:space for spaces
-                node.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
-              } else {
-                // PII spans multiple nodes
-                const firstNode = affectedNodes[0];
-                const lastNode = affectedNodes[affectedNodes.length - 1];
-                
-                // First node: keep text before PII + add replacement
-                const startInFirst = pii.start - firstNode.start;
-                firstNode.node.textContent = 
-                  firstNode.node.textContent.substring(0, startInFirst) + replacement;
-                firstNode.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
-                
-                // Middle nodes: clear content
-                for (let i = 1; i < affectedNodes.length - 1; i++) {
-                  affectedNodes[i].node.textContent = '';
-                }
-                
-                // Last node: keep text after PII
-                const endInLast = pii.end - lastNode.start;
-                lastNode.node.textContent = lastNode.node.textContent.substring(endInLast);
-                if (lastNode.node.textContent) {
-                  lastNode.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
-                }
-              }
-            }
-          }
-          
-          // Serialize back
+
+          applyRedactionsToXML(xmlDoc, piiItems);
+
           const serializer = new XMLSerializer();
-          let modifiedXML = serializer.serializeToString(xmlDoc);
-          
-          // Fix namespace declarations if needed
-          if (!modifiedXML.includes('xmlns:w=') && xmlPath === 'word/document.xml') {
-            modifiedXML = modifiedXML.replace(
-              '<w:document',
-              '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-            );
-          }
-          
-          zip.file(xmlPath, modifiedXML);
+          zip.file(xmlPath, serializer.serializeToString(xmlDoc));
         }
-        
-        // Generate DOCX
+
         const blob = await zip.generateAsync({ type: 'blob' });
-        const url = URL.createObjectURL(blob);
-        link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        URL.revokeObjectURL(url);
-        
+        downloadBlob(blob, filename);
         return { success: true, preservedFormat: true };
       } catch (formatError) {
-        console.error('Failed to preserve DOCX format:', formatError);
-        // Fall through to plain text export
+        console.error('DOCX format-preserving export failed:', formatError);
+        // Fall through to structured fallback
       }
     }
-    
-    // Fallback: Create new DOCX from plain text
-    const paragraphs = text.split('\n').map(line => 
-      new Paragraph({
-        children: [new TextRun(line || ' ')],
-        spacing: { after: 200 }
-      })
-    );
 
+    // ── Strategy 2: Structured fallback from plain text ────────────────────
+    const paragraphs = buildFormattedParagraphs(text);
     const doc = new Document({
       sections: [{
-        properties: {},
-        children: paragraphs
-      }]
+        properties: { page: { margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
+        children: paragraphs,
+      }],
     });
 
     const blob = await Packer.toBlob(doc);
-    const url = URL.createObjectURL(blob);
-    link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    URL.revokeObjectURL(url);
-    
+    downloadBlob(blob, filename);
     return { success: true, preservedFormat: false };
   } catch (error) {
     return { success: false, error: error.message };
-  } finally {
-    if (link && link.parentNode) {
-      document.body.removeChild(link);
-    }
   }
 };
 
-// Export as PDF (Pro tier only) — preserves original PDF layout when possible
-// SECURITY: Flattens PDF pages to images to prevent copy-paste extraction of redacted text
-export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPro = false, originalFilename = null) => {
-  try {
-    // Generate filename from original or use default
-    let filename = 'redacted-resume.pdf';
-    if (originalFilename) {
-      const nameWithoutExt = originalFilename.replace(/\.[^/.]+$/, '');
-      filename = `${nameWithoutExt}_redacted.pdf`;
+/**
+ * Build formatted Paragraph objects from plain text with section-header
+ * detection, bullet points, and heading hierarchy.
+ */
+function buildFormattedParagraphs(text) {
+  const lines = text.split('\n');
+  const paragraphs = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+
+    if (!trimmed) {
+      paragraphs.push(new Paragraph({ children: [new TextRun({ text: '' })], spacing: { after: 120 } }));
+      continue;
     }
 
-    // If original file is a PDF, flatten to images with burnt-in redactions
-    // This completely removes the text layer, preventing copy-paste extraction
+    const isSection =
+      SECTION_RE.test(trimmed) ||
+      (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && trimmed.length < 50 &&
+        /[A-Z]/.test(trimmed) && !trimmed.includes('['));
+
+    const isFirstLine =
+      i === lines.slice(0, i + 1).findIndex((l) => l.trim()) &&
+      !trimmed.includes('@') && !trimmed.includes('://');
+
+    const isBullet = /^[•\-*]\s/.test(trimmed);
+
+    if (isFirstLine) {
+      paragraphs.push(new Paragraph({
+        children: [new TextRun({ text: trimmed, bold: true, size: 28, font: 'Calibri' })],
+        heading: HeadingLevel.HEADING_1,
+        spacing: { after: 60 },
+      }));
+    } else if (isSection) {
+      paragraphs.push(new Paragraph({
+        children: [new TextRun({ text: trimmed, bold: true, size: 24, font: 'Calibri' })],
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 240, after: 120 },
+        border: { bottom: { color: '999999', space: 1, style: BorderStyle.SINGLE, size: 4 } },
+      }));
+    } else if (isBullet) {
+      const bulletText = trimmed.replace(/^[•\-*]\s*/, '');
+      paragraphs.push(new Paragraph({
+        children: [new TextRun({ text: `\u2022  ${bulletText}`, size: 22, font: 'Calibri' })],
+        spacing: { after: 40 },
+        indent: { left: 360 },
+      }));
+    } else {
+      paragraphs.push(new Paragraph({
+        children: [new TextRun({ text: trimmed, size: 22, font: 'Calibri' })],
+        spacing: { after: 60 },
+      }));
+    }
+  }
+  return paragraphs;
+}
+
+// ─── PDF Export ───────────────────────────────────────────────────────────────────
+
+/**
+ * Export as PDF.
+ *
+ * When the source is a PDF, pages are flattened to images with professional
+ * redaction overlays burnt in. The text layer is completely removed, preventing
+ * copy-paste extraction of redacted information.
+ *
+ * When the source is not a PDF (or flattening fails), a new PDF is created from
+ * the redacted text with section-header detection and basic formatting.
+ */
+export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPro = false, originalFilename = null) => {
+  try {
+    const filename = makeFilename(originalFilename, 'pdf');
+
+    // ── Strategy 1: Flatten original PDF to images with burnt-in redactions ─
     if (uploadedFile && uploadedFile.type === 'application/pdf' && piiItems.length > 0) {
       try {
         const arrayBuffer = await uploadedFile.arrayBuffer();
         const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-        
-        // Load with pdfjs for rendering and text positions
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
-        const pdfDoc = await loadingTask.promise;
-        
-        // Create new PDF with pdf-lib (will contain only images, no extractable text)
-        const newPdfDoc = await PDFDocument.create();
-        
-        // Build a global text position map (same logic as text extraction)
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
+        const pdfSrc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+        const newPdf = await PDFDocument.create();
+
+        // ── Build global text-position map (matches extractTextFromPDF) ─────
         let globalOffset = 0;
         const allPageItems = [];
-        
-        for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-          const page = await pdfDoc.getPage(pageNum);
-          const textContent = await page.getTextContent();
-          
-          // Sort items the same way as extractTextFromPDF
-          textContent.items.sort((a, b) => {
-            const aY = a.transform[5];
-            const bY = b.transform[5];
-            const aX = a.transform[4];
-            const bX = b.transform[4];
+
+        for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
+          const page = await pdfSrc.getPage(pageNum);
+          const tc = await page.getTextContent();
+
+          tc.items.sort((a, b) => {
+            const aY = a.transform[5], bY = b.transform[5];
+            const aX = a.transform[4], bX = b.transform[4];
             if (Math.abs(bY - aY) <= 5) return aX - bX;
             return bY - aY;
           });
-          
+
           const pageItems = [];
           let lastY = null;
-          
-          textContent.items.forEach((item, index) => {
-            const currentY = item.transform[5];
-            
-            if (lastY !== null && Math.abs(currentY - lastY) > 5) {
-              globalOffset += 1; // newline
-            }
-            
+
+          tc.items.forEach((item, index) => {
+            const curY = item.transform[5];
+            if (lastY !== null && Math.abs(curY - lastY) > 5) globalOffset += 1;
+
             const fontSize = Math.abs(item.transform[0]) || 12;
-            
             pageItems.push({
               str: item.str,
               start: globalOffset,
               end: globalOffset + item.str.length,
               pdfX: item.transform[4],
               pdfY: item.transform[5],
-              width: item.width || (item.str.length * fontSize * 0.5),
-              height: item.height || fontSize,
-              fontSize: fontSize
+              width: item.width || item.str.length * fontSize * 0.6,
+              height: item.height || fontSize * 1.2,
+              fontSize,
             });
-            
+
             globalOffset += item.str.length;
-            
-            if (index < textContent.items.length - 1) {
-              const nextItem = textContent.items[index + 1];
-              const nextY = nextItem.transform[5];
-              if (Math.abs(currentY - nextY) <= 5) {
-                globalOffset += 1; // space
-              }
+
+            if (index < tc.items.length - 1) {
+              const nextY = tc.items[index + 1].transform[5];
+              if (Math.abs(curY - nextY) <= 5) globalOffset += 1;
             }
-            
-            lastY = currentY;
+            lastY = curY;
           });
-          
-          globalOffset += 2; // page break
+
+          globalOffset += 2;
           allPageItems.push(pageItems);
         }
-        
-        // Render each page to canvas, apply redactions, embed as image
-        const renderScale = 2.0; // 2x for crisp text
-        const piiToRedact = piiItems.filter(p => p.redact);
-        
-        for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-          const page = await pdfDoc.getPage(pageNum);
+
+        // ── Render each page & burn in redactions ───────────────────────────
+        const renderScale = 2.5;
+        const piiToRedact = piiItems.filter((p) => p.redact);
+
+        for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
+          const page = await pdfSrc.getPage(pageNum);
           const viewport = page.getViewport({ scale: renderScale });
-          
-          // Create canvas and render the page
+
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
-          
+
           await page.render({ canvasContext: ctx, viewport }).promise;
-          
-          // Draw redaction boxes directly on the canvas
+
           const pageItems = allPageItems[pageNum - 1];
-          
+
           for (const pii of piiToRedact) {
-            const overlapping = pageItems.filter(item => 
-              item.start < pii.end && item.end > pii.start
+            // Primary: position-based matching
+            let overlapping = pageItems.filter(
+              (item) => item.start < pii.end && item.end > pii.start,
             );
-            
-            if (overlapping.length === 0) continue;
-            
-            // Draw white boxes over each overlapping text item
-            for (const item of overlapping) {
-              const padding = 2;
-              const canvasX = item.pdfX * renderScale - padding;
-              // PDF Y is bottom-up; canvas Y is top-down
-              const canvasY = viewport.height - (item.pdfY * renderScale) - (item.height * renderScale) - padding;
-              const canvasW = item.width * renderScale + padding * 2;
-              const canvasH = item.height * renderScale + padding * 2;
-              
-              ctx.fillStyle = 'white';
-              ctx.fillRect(canvasX, canvasY, canvasW, canvasH);
+
+            // Fallback: value-based matching (handles any remaining offset drift)
+            if (overlapping.length === 0 && pii.value) {
+              let runText = '';
+              const itemPos = [];
+              pageItems.forEach((item) => {
+                itemPos.push({ item, start: runText.length });
+                runText += item.str + ' ';
+              });
+              const vIdx = runText.indexOf(pii.value);
+              if (vIdx !== -1) {
+                const vEnd = vIdx + pii.value.length;
+                overlapping = itemPos
+                  .filter((ip) => ip.start < vEnd && ip.start + ip.item.str.length > vIdx)
+                  .map((ip) => ip.item);
+              }
             }
-            
-            // Draw replacement text at the first item's position
-            const firstItem = overlapping[0];
-            const replacement = pii.suggested || '[REDACTED]';
-            const fontSize = Math.min(firstItem.fontSize * 0.9, 10) * renderScale;
-            
-            ctx.font = `bold ${fontSize}px Helvetica, Arial, sans-serif`;
-            ctx.fillStyle = 'rgb(153, 0, 0)'; // dark red
-            const textX = firstItem.pdfX * renderScale;
-            const textY = viewport.height - (firstItem.pdfY * renderScale) - 1;
-            ctx.fillText(replacement, textX, textY);
+
+            if (overlapping.length === 0) continue;
+
+            // ── Professional black redaction boxes (industry standard) ──────
+            for (const item of overlapping) {
+              const pad = 2;
+              const x = item.pdfX * renderScale - pad;
+              const y = viewport.height - item.pdfY * renderScale - item.height * renderScale - pad;
+              const w = item.width * renderScale + pad * 2;
+              const h = item.height * renderScale + pad * 2;
+
+              ctx.fillStyle = '#111111';
+              ctx.fillRect(x, y, w, h);
+            }
+
+            // ── Replacement label (white on dark) ───────────────────────────
+            const first = overlapping[0];
+            const label = pii.suggested || '[REDACTED]';
+            const labelPx = Math.min(first.fontSize * 0.7, 8) * renderScale;
+
+            ctx.font = `600 ${labelPx}px "Segoe UI", Helvetica, Arial, sans-serif`;
+            ctx.fillStyle = '#ffffff';
+            ctx.textBaseline = 'bottom';
+            const labelX = first.pdfX * renderScale + 2;
+            const labelY = viewport.height - first.pdfY * renderScale - 1;
+            ctx.fillText(label, labelX, labelY);
           }
-          
-          // Convert canvas to image bytes
-          const imageDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-          const imageResponse = await fetch(imageDataUrl);
-          const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
-          
-          // Embed image in new PDF
-          const jpgImage = await newPdfDoc.embedJpg(imageBytes);
-          const origViewport = page.getViewport({ scale: 1.0 });
-          const newPage = newPdfDoc.addPage([origViewport.width, origViewport.height]);
-          
-          newPage.drawImage(jpgImage, {
-            x: 0,
-            y: 0,
-            width: origViewport.width,
-            height: origViewport.height,
-          });
+
+          // Convert canvas → JPEG → embed in new PDF
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+          const resp = await fetch(dataUrl);
+          const imgBytes = new Uint8Array(await resp.arrayBuffer());
+
+          const jpg = await newPdf.embedJpg(imgBytes);
+          const origVP = page.getViewport({ scale: 1.0 });
+          const newPage = newPdf.addPage([origVP.width, origVP.height]);
+          newPage.drawImage(jpg, { x: 0, y: 0, width: origVP.width, height: origVP.height });
         }
-        
-        // Save and download the flattened PDF
-        const pdfBytes = await newPdfDoc.save();
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        let link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        URL.revokeObjectURL(url);
-        document.body.removeChild(link);
-        
+
+        const pdfBytes = await newPdf.save();
+        downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), filename);
         return { success: true, preservedFormat: true };
       } catch (pdfError) {
-        console.error('Failed to export secure PDF, falling back:', pdfError);
-        // Fall through to plain text PDF generation
+        console.error('Secure PDF export failed, falling back:', pdfError);
       }
     }
-    
-    // Fallback: create new PDF from plain text
-    const sanitizedText = sanitizeForPDF(text);
-    
+
+    // ── Strategy 2: New PDF from redacted text with formatting ──────────────
+    const sanitized = sanitizeForPDF(text);
     const pdfDoc = await PDFDocument.create();
-    const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-    
-    const fontSize = 11;
+    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const bodySize = 10;
+    const headingSize = 12;
+    const nameSize = 14;
     const margin = 50;
-    const pageWidth = 595; // A4 width in points
-    const pageHeight = 842; // A4 height in points
-    const maxWidth = pageWidth - 2 * margin;
-    const lineHeight = fontSize * 1.2;
-    
-    let page = pdfDoc.addPage([pageWidth, pageHeight]);
-    let yPosition = pageHeight - margin;
-    
-    // Split text into lines
-    const lines = sanitizedText.split('\n');
-    
-    for (const line of lines) {
-      // Wrap long lines
-      const words = line.split(' ');
+    const pageW = 595;
+    const pageH = 842;
+    const maxW = pageW - 2 * margin;
+    const bodyLH = bodySize * 1.5;
+    const headingLH = headingSize * 1.8;
+    const nameLH = nameSize * 1.6;
+
+    let page = pdfDoc.addPage([pageW, pageH]);
+    let y = pageH - margin;
+
+    const lines = sanitized.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+
+      if (!trimmed) {
+        y -= bodyLH * 0.5;
+        if (y < margin + bodyLH) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
+        continue;
+      }
+
+      const isSection =
+        SECTION_RE.test(trimmed) ||
+        (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && trimmed.length < 50 &&
+          /[A-Z]/.test(trimmed) && !trimmed.includes('['));
+
+      const isFirstLine =
+        i === lines.slice(0, i + 1).findIndex((l) => l.trim()) &&
+        !trimmed.includes('@') && !trimmed.includes('://');
+
+      let font, size, lh;
+
+      if (isFirstLine) {
+        font = fontBold; size = nameSize; lh = nameLH;
+      } else if (isSection) {
+        font = fontBold; size = headingSize; lh = headingLH;
+        y -= 8;
+        if (y < margin + lh) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
+      } else {
+        font = fontRegular; size = bodySize; lh = bodyLH;
+      }
+
+      // Word-wrap and draw
+      const words = trimmed.split(' ');
       let currentLine = '';
-      
+
       for (const word of words) {
-        const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const testWidth = timesRomanFont.widthOfTextAtSize(testLine, fontSize);
-        
-        if (testWidth > maxWidth && currentLine) {
-          // Draw current line
-          if (yPosition < margin + lineHeight) {
-            page = pdfDoc.addPage([pageWidth, pageHeight]);
-            yPosition = pageHeight - margin;
-          }
-          
-          page.drawText(currentLine, {
-            x: margin,
-            y: yPosition,
-            size: fontSize,
-            font: timesRomanFont,
-            color: rgb(0, 0, 0)
-          });
-          
-          yPosition -= lineHeight;
+        const test = currentLine ? `${currentLine} ${word}` : word;
+        if (font.widthOfTextAtSize(test, size) > maxW && currentLine) {
+          if (y < margin + lh) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
+          page.drawText(currentLine, { x: margin, y, size, font, color: rgb(0.1, 0.1, 0.1) });
+          y -= lh;
           currentLine = word;
         } else {
-          currentLine = testLine;
+          currentLine = test;
         }
       }
-      
-      // Draw remaining text
+
       if (currentLine) {
-        if (yPosition < margin + lineHeight) {
-          page = pdfDoc.addPage([pageWidth, pageHeight]);
-          yPosition = pageHeight - margin;
-        }
-        
-        page.drawText(currentLine, {
-          x: margin,
-          y: yPosition,
-          size: fontSize,
-          font: timesRomanFont,
-          color: rgb(0, 0, 0)
-        });
-        
-        yPosition -= lineHeight;
+        if (y < margin + lh) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
+        page.drawText(currentLine, { x: margin, y, size, font, color: rgb(0.1, 0.1, 0.1) });
+        y -= lh;
       }
-      
-      // Empty line spacing
-      if (!line.trim()) {
-        yPosition -= lineHeight / 2;
-        // Check page boundary after empty line spacing too
-        if (yPosition < margin + lineHeight) {
-          page = pdfDoc.addPage([pageWidth, pageHeight]);
-          yPosition = pageHeight - margin;
-        }
+
+      // Underline after section headers
+      if (isSection) {
+        page.drawLine({
+          start: { x: margin, y: y + lh * 0.3 },
+          end: { x: pageW - margin, y: y + lh * 0.3 },
+          thickness: 0.5,
+          color: rgb(0.6, 0.6, 0.6),
+        });
+        y -= 4;
       }
     }
-    
+
     const pdfBytes = await pdfDoc.save();
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    let link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    URL.revokeObjectURL(url);
-    document.body.removeChild(link);
-    
+    downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), filename);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

@@ -342,10 +342,10 @@ function filterFalsePositives(entities) {
 function getSuggestedReplacement(type) {
   return (
     {
-      name: '[name redacted]',
-      organization: '[org redacted]',
-      location: '[location redacted]'
-    }[type] || '[redacted]'
+      name: '[NAME REDACTED]',
+      organization: '[ORG REDACTED]',
+      location: '[LOCATION REDACTED]'
+    }[type] || '[REDACTED]'
   );
 }
 

@@ -30,21 +30,21 @@ export const PII_TYPES = {
 };
 
 export const PII_REPLACEMENTS = {
-  [PII_TYPES.EMAIL]: '[email redacted]',
-  [PII_TYPES.PHONE]: '[phone redacted]',
-  [PII_TYPES.URL]: '[URL redacted]',
-  [PII_TYPES.NAME]: '[name redacted]',
-  [PII_TYPES.ADDRESS]: '[address redacted]',
-  [PII_TYPES.SSN]: '[SSN redacted]',
-  [PII_TYPES.CREDIT_CARD]: '[card redacted]',
-  [PII_TYPES.DATE_OF_BIRTH]: '[DOB redacted]',
-  [PII_TYPES.PASSPORT]: '[passport redacted]',
-  [PII_TYPES.IP_ADDRESS]: '[IP redacted]',
-  [PII_TYPES.BANK_ACCOUNT]: '[account redacted]',
-  [PII_TYPES.TAX_ID]: '[tax ID redacted]',
-  [PII_TYPES.AGE]: '[age redacted]',
-  [PII_TYPES.ORGANIZATION]: '[org redacted]',
-  [PII_TYPES.LOCATION]: '[location redacted]'
+  [PII_TYPES.EMAIL]: '[EMAIL REDACTED]',
+  [PII_TYPES.PHONE]: '[PHONE REDACTED]',
+  [PII_TYPES.URL]: '[URL REDACTED]',
+  [PII_TYPES.NAME]: '[NAME REDACTED]',
+  [PII_TYPES.ADDRESS]: '[ADDRESS REDACTED]',
+  [PII_TYPES.SSN]: '[SSN REDACTED]',
+  [PII_TYPES.CREDIT_CARD]: '[CARD REDACTED]',
+  [PII_TYPES.DATE_OF_BIRTH]: '[DOB REDACTED]',
+  [PII_TYPES.PASSPORT]: '[PASSPORT REDACTED]',
+  [PII_TYPES.IP_ADDRESS]: '[IP REDACTED]',
+  [PII_TYPES.BANK_ACCOUNT]: '[ACCOUNT REDACTED]',
+  [PII_TYPES.TAX_ID]: '[TAX ID REDACTED]',
+  [PII_TYPES.AGE]: '[AGE REDACTED]',
+  [PII_TYPES.ORGANIZATION]: '[ORG REDACTED]',
+  [PII_TYPES.LOCATION]: '[LOCATION REDACTED]'
 };
 
 export const PII_COLORS = {
