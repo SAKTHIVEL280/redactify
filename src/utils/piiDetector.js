@@ -369,6 +369,8 @@ function detectHeaderNames(text) {
 
 /**
  * Replace PII in text based on user-confirmed selections.
+ * Processes right-to-left and skips overlapping ranges to prevent
+ * corrupted output when detections partially overlap.
  */
 export function replacePII(text, selections) {
   if (!text || !selections || selections.length === 0) return text;
@@ -378,11 +380,16 @@ export function replacePII(text, selections) {
     .sort((a, b) => b.start - a.start);
 
   let result = text;
+  let lastStart = Infinity; // track the last replacement start to skip overlaps
+
   accepted.forEach((item) => {
+    // Skip if this item overlaps with a previously applied replacement
+    if (item.end > lastStart) return;
     result =
       result.substring(0, item.start) +
       (item.suggested || '[REDACTED]') +
       result.substring(item.end);
+    lastStart = item.start;
   });
 
   return result;
@@ -390,6 +397,7 @@ export function replacePII(text, selections) {
 
 /**
  * Highlight PII in text with HTML mark tags for the document viewer.
+ * Skips overlapping ranges to prevent duplicated text in output.
  */
 export function highlightPII(text, matches) {
   if (!text || !matches || matches.length === 0) return escapeHtml(text);
@@ -399,6 +407,9 @@ export function highlightPII(text, matches) {
   let lastIndex = 0;
 
   sorted.forEach((pii) => {
+    // Skip if this PII overlaps with the previous one already processed
+    if (pii.start < lastIndex) return;
+
     if (pii.start > lastIndex) {
       parts.push(escapeHtml(text.substring(lastIndex, pii.start)));
     }

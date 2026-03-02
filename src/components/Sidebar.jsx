@@ -71,9 +71,18 @@ function Sidebar({ piiItems, onTogglePII, onBulkSetPII, originalText, onUpgradeC
   };
 
   const handleExportTXT = () => {
-    const redacted = replacePII(originalText, piiItems);
-    const filename = uploadedFile ? uploadedFile.name : null;
-    exportAsTXT(redacted, filename);
+    try {
+      const redacted = replacePII(originalText, piiItems);
+      const filename = uploadedFile ? uploadedFile.name : null;
+      const result = exportAsTXT(redacted, filename);
+      if (!result.success) {
+        showError(`Failed to export TXT: ${result.error}`);
+      } else {
+        showSuccess('Text file exported successfully');
+      }
+    } catch (error) {
+      showError(`Export failed: ${error.message}`);
+    }
   };
 
   const handleExportDOCX = async () => {
@@ -112,12 +121,23 @@ function Sidebar({ piiItems, onTogglePII, onBulkSetPII, originalText, onUpgradeC
       const result = await exportAsPDF(redacted, uploadedFile, piiItems, isPro, filename);
       if (!result.success) {
         showError(`Failed to export PDF: ${result.error}`);
+      } else if (result.preservedFormat) {
+        showSuccess('PDF exported with original formatting & copyable text');
+      } else {
+        showSuccess('PDF exported successfully');
       }
     } catch (error) {
       showError(`Export failed: ${error.message}`);
     } finally {
       setExporting(false);
     }
+  };
+
+  // Smart export: auto-selects the matching format for the uploaded file
+  const handleExportOriginalFormat = async () => {
+    if (fileType === 'docx') return handleExportDOCX();
+    if (fileType === 'pdf') return handleExportPDF();
+    return handleExportTXT();
   };
 
   const getTypeColor = (type) => {
@@ -279,6 +299,22 @@ function Sidebar({ piiItems, onTogglePII, onBulkSetPII, originalText, onUpgradeC
       {/* Export Section */}
       <div className="p-3 bg-zinc-900/50 border-t border-white/5 backdrop-blur-sm flex-shrink-0">
         <div className="space-y-1.5">
+          {/* Smart export — matches original file type */}
+          {uploadedFile && fileType && fileType !== 'txt' && (
+            <button
+              onClick={handleExportOriginalFormat}
+              disabled={exporting || stats.accepted === 0}
+              className={`w-full px-3 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-between border ${
+                isPro
+                  ? 'bg-gradient-to-r from-white to-zinc-100 text-black border-transparent hover:from-zinc-100 hover:to-zinc-200 shadow-lg'
+                  : 'bg-zinc-800/50 text-zinc-400 border-white/5 hover:border-white/10'
+              } disabled:opacity-30 disabled:cursor-not-allowed ${exporting ? 'opacity-70 cursor-wait' : ''}`}
+            >
+              <span>{exporting ? 'Exporting...' : `Export as .${fileType.toUpperCase()}`}</span>
+              <span className="text-[9px] font-bold font-mono opacity-60">ORIGINAL FORMAT</span>
+            </button>
+          )}
+
           <button
             onClick={handleExportTXT}
             disabled={stats.accepted === 0}

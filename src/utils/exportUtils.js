@@ -35,8 +35,10 @@ function downloadBlob(blob, filename) {
   link.download = filename;
   document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
   document.body.removeChild(link);
+  // Defer revocation — some browsers (Firefox, Safari) start the download
+  // asynchronously and need the URL to remain valid briefly.
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 /** Build redacted filename from original. */
@@ -183,20 +185,27 @@ export const exportAsDOCX = async (text, originalFilename = null, originalFile =
     const filename = makeFilename(originalFilename, 'docx');
 
     // ── Strategy 1: Format-preserving in-place edit ────────────────────────
+    //    Opens the DOCX as a ZIP, finds all text-bearing XML parts (body,
+    //    headers, footers, footnotes, endnotes), and does value-based
+    //    search-replace inside <w:t> nodes. All fonts, styles, images,
+    //    tables, and layout are untouched — only PII values change.
     if (
       originalFile &&
-      originalFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      originalFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+      piiItems.some((p) => p.redact)
     ) {
       try {
         const JSZip = (await import('jszip')).default;
         const arrayBuffer = await originalFile.arrayBuffer();
         const zip = await JSZip.loadAsync(arrayBuffer);
 
+        // Collect every XML part that can contain visible text
         const xmlFiles = ['word/document.xml'];
         Object.keys(zip.files).forEach((f) => {
-          if (/^word\/(header|footer)\d+\.xml$/.test(f)) xmlFiles.push(f);
+          if (/^word\/(header|footer|footnotes|endnotes)\d*\.xml$/.test(f)) xmlFiles.push(f);
         });
 
+        let partsEdited = 0;
         for (const xmlPath of xmlFiles) {
           const xmlFile = zip.file(xmlPath);
           if (!xmlFile) continue;
@@ -206,7 +215,7 @@ export const exportAsDOCX = async (text, originalFilename = null, originalFile =
           const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
 
           if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-            console.warn(`XML parse error in ${xmlPath}, skipping`);
+            console.warn(`[DOCX export] XML parse error in ${xmlPath}, skipping`);
             continue;
           }
 
@@ -214,13 +223,21 @@ export const exportAsDOCX = async (text, originalFilename = null, originalFile =
 
           const serializer = new XMLSerializer();
           zip.file(xmlPath, serializer.serializeToString(xmlDoc));
+          partsEdited++;
         }
 
-        const blob = await zip.generateAsync({ type: 'blob' });
-        downloadBlob(blob, filename);
-        return { success: true, preservedFormat: true };
+        if (partsEdited > 0) {
+          const blob = await zip.generateAsync({
+            type: 'blob',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          });
+          downloadBlob(blob, filename);
+          return { success: true, preservedFormat: true };
+        }
+        // If no parts were edited, fall through to Strategy 2
+        console.warn('[DOCX export] No XML parts edited, falling back to text DOCX');
       } catch (formatError) {
-        console.error('DOCX format-preserving export failed:', formatError);
+        console.error('[DOCX export] Format-preserving export failed:', formatError);
         // Fall through to structured fallback
       }
     }
@@ -304,19 +321,23 @@ function buildFormattedParagraphs(text) {
 /**
  * Export as PDF.
  *
- * When the source is a PDF, pages are flattened to images with professional
- * redaction overlays burnt in. The text layer is completely removed, preventing
- * copy-paste extraction of redacted information.
+ * Strategy 1 (PDF source): Renders each page to a high-quality image with black
+ * redaction boxes burnt in, then embeds that image in a new PDF page. On top of
+ * the image an INVISIBLE text layer is drawn so that:
+ *   • Non-PII text can be selected & copied from any PDF viewer.
+ *   • Redacted PII is replaced by the label (e.g. "[EMAIL REDACTED]") in the
+ *     text layer — the original PII string is NEVER present in the output file.
+ *   • Visual formatting is pixel-perfect (the image IS the original page).
  *
- * When the source is not a PDF (or flattening fails), a new PDF is created from
- * the redacted text with section-header detection and basic formatting.
+ * Strategy 2 (non-PDF source or fallback): Builds a new PDF from redacted text
+ * with section-header detection, bullet formatting, and word-wrap.
  */
-export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPro = false, originalFilename = null) => {
+export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], _isPro = false, originalFilename = null) => {
   try {
     const filename = makeFilename(originalFilename, 'pdf');
 
-    // ── Strategy 1: Flatten original PDF to images with burnt-in redactions ─
-    if (uploadedFile && uploadedFile.type === 'application/pdf' && piiItems.length > 0) {
+    // ── Strategy 1: Image layer + invisible copyable text layer ────────────
+    if (uploadedFile && uploadedFile.type === 'application/pdf' && piiItems.some((p) => p.redact)) {
       try {
         const arrayBuffer = await uploadedFile.arrayBuffer();
         const pdfjsLib = await import('pdfjs-dist');
@@ -325,8 +346,9 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
 
         const pdfSrc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
         const newPdf = await PDFDocument.create();
+        const textFont = await newPdf.embedFont(StandardFonts.Helvetica);
 
-        // ── Build global text-position map (matches extractTextFromPDF) ─────
+        // ── Build global text-position map (mirrors extractTextFromPDF) ─────
         let globalOffset = 0;
         const allPageItems = [];
 
@@ -373,30 +395,33 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
           allPageItems.push(pageItems);
         }
 
-        // ── Render each page & burn in redactions ───────────────────────────
+        // ── Render each page ────────────────────────────────────────────────
         const renderScale = 2.5;
         const piiToRedact = piiItems.filter((p) => p.redact);
 
         for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
           const page = await pdfSrc.getPage(pageNum);
           const viewport = page.getViewport({ scale: renderScale });
+          const origVP = page.getViewport({ scale: 1.0 });
 
+          // ── a) Canvas render ──────────────────────────────────────────────
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
-
           await page.render({ canvasContext: ctx, viewport }).promise;
 
           const pageItems = allPageItems[pageNum - 1];
+          const redactedIndices = new Set();          // track which items are redacted
+          const replacementMap = new Map();           // itemIndex → replacement label
 
+          // ── b) Find PII & draw black boxes on canvas ──────────────────────
           for (const pii of piiToRedact) {
-            // Primary: position-based matching
             let overlapping = pageItems.filter(
               (item) => item.start < pii.end && item.end > pii.start,
             );
 
-            // Fallback: value-based matching (handles any remaining offset drift)
+            // Fallback: value-based matching
             if (overlapping.length === 0 && pii.value) {
               let runText = '';
               const itemPos = [];
@@ -415,47 +440,99 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], isPr
 
             if (overlapping.length === 0) continue;
 
-            // ── Professional black redaction boxes (industry standard) ──────
+            // Black redaction boxes (burnt into the image)
             for (const item of overlapping) {
+              redactedIndices.add(pageItems.indexOf(item));
               const pad = 2;
               const x = item.pdfX * renderScale - pad;
               const y = viewport.height - item.pdfY * renderScale - item.height * renderScale - pad;
               const w = item.width * renderScale + pad * 2;
               const h = item.height * renderScale + pad * 2;
-
               ctx.fillStyle = '#111111';
               ctx.fillRect(x, y, w, h);
             }
 
-            // ── Replacement label (white on dark) ───────────────────────────
+            // Replacement label (white on black, burnt into image)
             const first = overlapping[0];
+            const firstIdx = pageItems.indexOf(first);
             const label = pii.suggested || '[REDACTED]';
             const labelPx = Math.min(first.fontSize * 0.7, 8) * renderScale;
-
             ctx.font = `600 ${labelPx}px "Segoe UI", Helvetica, Arial, sans-serif`;
             ctx.fillStyle = '#ffffff';
             ctx.textBaseline = 'bottom';
-            const labelX = first.pdfX * renderScale + 2;
-            const labelY = viewport.height - first.pdfY * renderScale - 1;
-            ctx.fillText(label, labelX, labelY);
+            ctx.fillText(label, first.pdfX * renderScale + 2, viewport.height - first.pdfY * renderScale - 1);
+
+            if (!replacementMap.has(firstIdx)) {
+              replacementMap.set(firstIdx, label);
+            }
           }
 
-          // Convert canvas → JPEG → embed in new PDF
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-          const resp = await fetch(dataUrl);
-          const imgBytes = new Uint8Array(await resp.arrayBuffer());
-
+          // ── c) Embed rendered canvas as page-sized image ──────────────────
+          const imgBytes = await new Promise((resolve, reject) => {
+            canvas.toBlob(async (blob) => {
+              if (!blob) return reject(new Error('Canvas toBlob failed'));
+              resolve(new Uint8Array(await blob.arrayBuffer()));
+            }, 'image/jpeg', 0.95);
+          });
+          // Release canvas memory immediately (important for multi-page PDFs)
+          canvas.width = 0;
+          canvas.height = 0;
           const jpg = await newPdf.embedJpg(imgBytes);
-          const origVP = page.getViewport({ scale: 1.0 });
+
           const newPage = newPdf.addPage([origVP.width, origVP.height]);
           newPage.drawImage(jpg, { x: 0, y: 0, width: origVP.width, height: origVP.height });
+
+          // ── d) Invisible text layer for copy-paste ────────────────────────
+          //    Draws each text fragment at its original PDF position with near-
+          //    zero opacity so it is invisible but selectable in any PDF viewer.
+          //    Redacted items are replaced by the label; non-redacted items keep
+          //    their original text.
+          for (let i = 0; i < pageItems.length; i++) {
+            const item = pageItems[i];
+
+            if (redactedIndices.has(i)) {
+              // Emit replacement label once (on the first fragment of the PII
+              // span); skip subsequent fragments that belong to the same span.
+              if (replacementMap.has(i)) {
+                const safeLabel = sanitizeForPDF(replacementMap.get(i));
+                if (safeLabel) {
+                  try {
+                    newPage.drawText(safeLabel, {
+                      x: item.pdfX,
+                      y: item.pdfY,
+                      size: Math.max(Math.min(item.fontSize * 0.75, 10), 4),
+                      font: textFont,
+                      color: rgb(0, 0, 0),
+                      opacity: 0.01,
+                    });
+                  } catch (_) { /* skip unencodable text */ }
+                }
+              }
+              continue;
+            }
+
+            // Non-redacted text — preserve at original position
+            const safeStr = sanitizeForPDF(item.str);
+            if (safeStr && safeStr.trim()) {
+              try {
+                newPage.drawText(safeStr, {
+                  x: item.pdfX,
+                  y: item.pdfY,
+                  size: item.fontSize,
+                  font: textFont,
+                  color: rgb(0, 0, 0),
+                  opacity: 0.01,
+                });
+              } catch (_) { /* skip unencodable text */ }
+            }
+          }
         }
 
         const pdfBytes = await newPdf.save();
         downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), filename);
         return { success: true, preservedFormat: true };
       } catch (pdfError) {
-        console.error('Secure PDF export failed, falling back:', pdfError);
+        console.error('PDF export failed, falling back to text PDF:', pdfError);
       }
     }
 
