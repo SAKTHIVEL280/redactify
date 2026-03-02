@@ -135,6 +135,8 @@ function Sidebar({ piiItems, onTogglePII, onBulkSetPII, originalText, onUpgradeC
       case PII_TYPES.BANK_ACCOUNT: return 'bg-rose-500';
       case PII_TYPES.TAX_ID: return 'bg-amber-500';
       case PII_TYPES.AGE: return 'bg-lime-500';
+      case PII_TYPES.ORGANIZATION: return 'bg-sky-500';
+      case PII_TYPES.LOCATION: return 'bg-emerald-500';
       case 'custom': return 'bg-fuchsia-500';
       default: return 'bg-zinc-500';
     }

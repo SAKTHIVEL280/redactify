@@ -1,234 +1,153 @@
 /**
- * Context-Aware PII Detection
- * Analyzes document structure to understand what's actually private/sensitive
+ * Context-Aware PII Filtering
+ *
+ * Analyses document structure (header, personal sections, body) to set
+ * intelligent default `redact` flags on detected entities.
+ *
+ * IMPORTANT: This module NEVER removes entities from the list.  It only
+ * sets `redact: true | false` so the user can always override the decision
+ * from the sidebar.
  */
 
+// ─── Document Structure Analysis ───────────────────────────────────────────────
+
 /**
- * Analyze document structure and identify sections
- * @param {string} text - Full document text
- * @returns {Object} Document analysis with sections
+ * Identify header area, personal / contact sections, and overall structure.
  */
-export function analyzeDocumentStructure(text) {
+function analyseDocumentStructure(text) {
   const lines = text.split('\n');
-  
-  // Detect header (first 10% of document or until first empty line)
-  const firstBlankLineIdx = lines.findIndex((line, i) => i > 0 && line.trim() === '');
+
+  // Header = first ~15% of lines, capped between 3 and 12 lines
+  const firstBlankIdx = lines.findIndex((l, i) => i > 0 && l.trim() === '');
+  const rawEnd = Math.max(3, Math.ceil(lines.length * 0.15));
   const headerEndIndex = Math.min(
-    Math.ceil(lines.length * 0.1),
-    firstBlankLineIdx >= 0 ? firstBlankLineIdx : lines.length
+    rawEnd,
+    firstBlankIdx >= 1 ? firstBlankIdx : Math.min(12, lines.length)
   );
-  
-  const headerLines = lines.slice(0, headerEndIndex);
-  const bodyLines = lines.slice(headerEndIndex);
-  
-  // Identify contact/personal sections
-  const personalSectionPatterns = [
-    /^(contact|about|profile|personal|summary|objective)/i,
-    /^(email|phone|address|location)/i
-  ];
-  
+
+  const headerText = lines.slice(0, headerEndIndex).join('\n');
+
+  // Find personal / contact sections by keyword
+  const contactPatterns =
+    /^(contact|about me|profile|personal|email|phone|address|location|summary|objective)/i;
+
   const personalSections = [];
-  lines.forEach((line, index) => {
-    if (personalSectionPatterns.some(pattern => pattern.test(line.trim()))) {
+  lines.forEach((line, idx) => {
+    if (contactPatterns.test(line.trim())) {
       personalSections.push({
-        startLine: index,
-        endLine: Math.min(index + 5, lines.length), // Next 5 lines likely contain personal info
-        type: 'personal'
+        startLine: idx,
+        endLine: Math.min(idx + 6, lines.length)
       });
     }
   });
-  
-  return {
-    headerText: headerLines.join('\n'),
-    bodyText: bodyLines.join('\n'),
-    headerEndIndex,
-    personalSections,
-    totalLines: lines.length
-  };
+
+  return { headerText, headerEndIndex, personalSections, totalLines: lines.length };
 }
 
 /**
- * Check if an entity is in a personal/contact section
- * @param {Object} entity - Detected entity
- * @param {string} text - Full text
- * @param {Object} structure - Document structure from analyzeDocumentStructure
- * @returns {boolean}
+ * Check which line number a character position falls on.
  */
-export function isInPersonalSection(entity, text, structure) {
-  const position = entity.start;
-  
-  // Check if in header (first 10% of document)
-  if (position < structure.headerText.length) {
-    return true;
-  }
-  
-  // Check if in identified personal sections
-  const lines = text.split('\n');
-  let currentPos = 0;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const lineEnd = currentPos + lines[i].length + 1; // +1 for newline
-    
-    if (position >= currentPos && position < lineEnd) {
-      // Found the line containing this entity
-      return structure.personalSections.some(section => 
-        i >= section.startLine && i <= section.endLine
-      );
-    }
-    
-    currentPos = lineEnd;
-  }
-  
-  return false;
+function lineAtPosition(text, charPos) {
+  return text.substring(0, charPos).split('\n').length - 1;
 }
 
 /**
- * Check if entity is near contact information (likely personal)
- * @param {Object} entity - Detected entity
- * @param {string} text - Full text
- * @param {Array} allDetections - All detected entities
- * @returns {boolean}
+ * Is this entity inside the header or a known personal / contact section?
  */
-export function isNearContactInfo(entity, text, allDetections) {
-  const contextWindow = 200; // Characters before/after
-  const start = Math.max(0, entity.start - contextWindow);
-  const end = Math.min(text.length, entity.end + contextWindow);
-  const context = text.slice(start, end);
-  
-  // Check if there's an email, phone, or URL near this entity
-  const hasContactInfo = allDetections.some(other => 
-    (other.type === 'email' || other.type === 'phone' || other.type === 'url') &&
-    Math.abs(other.start - entity.start) < contextWindow
+function isInContactArea(entity, text, structure) {
+  const line = lineAtPosition(text, entity.start);
+
+  // Inside the header block?
+  if (line < structure.headerEndIndex) return true;
+
+  // Inside a labelled personal section?
+  return structure.personalSections.some(
+    (s) => line >= s.startLine && line <= s.endLine
   );
-  
-  // Check for contact-related keywords in context
-  const contactKeywords = /\b(email|phone|mobile|contact|reach|call|linkedin|github)\b/i;
-  const hasContactKeyword = contactKeywords.test(context);
-  
-  return hasContactInfo || hasContactKeyword;
 }
 
 /**
- * Check if name is preceded by a label (e.g., "Name:", "By:")
- * @param {Object} entity - Detected entity
- * @param {string} text - Full text
- * @returns {boolean}
+ * Is this entity near (within 250 chars) other contact info?
  */
-export function hasPersonalLabel(entity, text) {
-  const precedingText = text.slice(Math.max(0, entity.start - 50), entity.start);
-  
-  const labelPatterns = [
-    /\b(name|candidate|applicant|by|author|from)\s*:?\s*$/i,
-    /^[A-Z][a-z]+\s+[A-Z][a-z]+\s*$/  // "First Last" pattern at start
-  ];
-  
-  return labelPatterns.some(pattern => pattern.test(precedingText.trim()));
-}
-
-/**
- * Check if organization is actually a proper institution
- * @param {string} value - Organization name
- * @param {string} text - Full text
- * @returns {boolean}
- */
-export function isProperInstitution(value, text) {
-  // Patterns that indicate real institutions
-  const institutionPatterns = [
-    /\b(university|college|institute|school|academy)\b/i,
-    /\b(corporation|company|inc\.|ltd\.|llc|pvt)\b/i,
-    /\b(hospital|medical|clinic)\b/i,
-    /\b(government|ministry|department)\b/i
-  ];
-  
-  // Check if the org name contains institution keywords
-  const hasInstitutionKeyword = institutionPatterns.some(pattern => 
-    pattern.test(value)
+function isNearContactInfo(entity, allDetections) {
+  const WINDOW = 250;
+  return allDetections.some(
+    (other) =>
+      other !== entity &&
+      ['email', 'phone', 'url'].includes(other.type) &&
+      Math.abs(other.start - entity.start) < WINDOW
   );
-  
-  // Check if it's mentioned multiple times (likely important)
-  const occurrences = (text.match(new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
-  
-  // Real institutions are usually mentioned multiple times OR have institution keywords
-  return hasInstitutionKeyword || occurrences >= 2;
 }
 
-/**
- * Determine if an entity should be redacted based on context
- * @param {Object} entity - Detected entity
- * @param {string} fullText - Full document text
- * @param {Array} allDetections - All detected entities
- * @returns {Object} { shouldRedact: boolean, reason: string }
- */
-export function shouldRedactEntity(entity, fullText, allDetections) {
-  const structure = analyzeDocumentStructure(fullText);
-  
-  // Always redact contact information and sensitive identifiers
-  if (['email', 'phone', 'ssn', 'credit_card', 'ip', 'dob', 'passport', 'bank_account', 'tax_id', 'age', 'address'].includes(entity.type)) {
-    return { shouldRedact: true, reason: 'sensitive_contact' };
-  }
-  
-  // Always redact URLs (social media profiles)
-  if (entity.type === 'url') {
-    return { shouldRedact: true, reason: 'url' };
-  }
-  
-  // For names
-  if (entity.type === 'name') {
-    const inPersonalSection = isInPersonalSection(entity, fullText, structure);
-    const nearContact = isNearContactInfo(entity, fullText, allDetections);
-    const hasLabel = hasPersonalLabel(entity, fullText);
-    
-    // Redact if in header, near contact info, or has personal label
-    if (inPersonalSection || nearContact || hasLabel) {
-      return { shouldRedact: true, reason: 'personal_name' };
-    }
-    
-    // Otherwise, keep (might be a reference to someone else)
-    return { shouldRedact: false, reason: 'reference_name' };
-  }
-  
-  // For organizations
-  if (entity.type === 'organization') {
-    const isInstitution = isProperInstitution(entity.value, fullText);
-    
-    // Keep educational institutions and proper companies
-    if (isInstitution) {
-      return { shouldRedact: false, reason: 'institution' };
-    }
-    
-    // Redact if it's not a clear institution (might be misdetected)
-    return { shouldRedact: false, reason: 'unclear_org' };
-  }
-  
-  // For locations - redact if in personal/header section (home address area), skip if in work/education
-  if (entity.type === 'location') {
-    const inPersonalSection = isInPersonalSection(entity, fullText, structure);
-    const nearContact = isNearContactInfo(entity, fullText, allDetections);
-    
-    if (inPersonalSection || nearContact) {
-      return { shouldRedact: true, reason: 'personal_location' };
-    }
-    return { shouldRedact: false, reason: 'location_public' };
-  }
-  
-  // Default: don't redact
-  return { shouldRedact: false, reason: 'default' };
-}
+// ─── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Apply context-aware filtering to detected entities
- * @param {Array} detections - All detected entities
- * @param {string} fullText - Full document text
- * @returns {Array} Filtered detections with only items that should be redacted
+ * Walk through every detection and set a sensible `redact` default.
+ *
+ * Privacy-first approach:
+ *   • Contact info (email, phone, SSN …) → always redact
+ *   • Names  → always redact (user can un-check references they want to keep)
+ *   • Organisations → default ignore (company names are usually public)
+ *   • Locations → redact if in header / contact area, ignore elsewhere
+ *
+ * @param {Array}  detections  — merged detection array
+ * @param {string} fullText    — the whole document text
+ * @returns {Array} same array with `redact` and `contextReason` filled in
  */
 export function applyContextAwareFiltering(detections, fullText) {
-  return detections.map(entity => {
-    const decision = shouldRedactEntity(entity, fullText, detections);
-    
-    return {
-      ...entity,
-      redact: decision.shouldRedact,
-      contextReason: decision.reason
-    };
-  }).filter(entity => entity.redact); // Only return items that should be redacted
+  if (!detections || detections.length === 0) return [];
+
+  const structure = analyseDocumentStructure(fullText);
+
+  return detections.map((entity) => {
+    let redact = true;
+    let reason = 'default';
+
+    // ── Always redact structured contact / sensitive data ───────────────
+
+    const sensitiveTypes = [
+      'email', 'phone', 'ssn', 'credit_card', 'ip', 'dob',
+      'passport', 'bank_account', 'tax_id', 'age', 'address', 'url'
+    ];
+
+    if (sensitiveTypes.includes(entity.type)) {
+      redact = true;
+      reason = 'sensitive_data';
+    }
+
+    // ── Names → redact by default (privacy-first) ──────────────────────
+
+    else if (entity.type === 'name') {
+      redact = true;
+      reason = isInContactArea(entity, fullText, structure)
+        ? 'personal_name'
+        : 'name_in_body';
+    }
+
+    // ── Organisations → keep visible but default to ignore ─────────────
+
+    else if (entity.type === 'organization') {
+      redact = false;
+      reason = 'organization_public';
+    }
+
+    // ── Locations → redact only if in personal area ────────────────────
+
+    else if (entity.type === 'location') {
+      const inContact = isInContactArea(entity, fullText, structure);
+      const nearContact = isNearContactInfo(entity, detections);
+      redact = inContact || nearContact;
+      reason = redact ? 'personal_location' : 'work_location';
+    }
+
+    // ── Custom rules → always redact ───────────────────────────────────
+
+    else if (entity.type === 'custom') {
+      redact = true;
+      reason = 'custom_rule';
+    }
+
+    return { ...entity, redact, contextReason: reason };
+  });
+  // NOTE: No .filter() — every entity stays visible for the user.
 }

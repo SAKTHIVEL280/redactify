@@ -1,161 +1,120 @@
 /**
- * Smart PII Detection - Combines ML (for names, orgs) + Regex (for patterns like email, phone)
- * NOW WITH CONTEXT-AWARE FILTERING
- * 
- * Strategy:
- * - ML Model: Detects names, organizations, locations (context-aware)
- * - Regex: Detects emails, phones, SSN, credit cards, IP addresses (pattern-based)
- * - Context Analysis: Understands document structure to avoid false positives
- * 
- * This avoids false positives from regex date detection while catching all PII types.
+ * Smart PII Detection — Orchestrator
+ *
+ * Combines:
+ *   ML model  → Names, Organisations, Locations  (via worker / hook)
+ *   Regex     → Email, Phone, SSN, Credit Card …  (via piiDetector.js)
+ *   Context   → Sets intelligent redact/ignore defaults
+ *
+ * Exported functions used by Redactor.jsx:
+ *   detectSmartPII(text, mlDetectFn)  — full detection pipeline
+ *   mergeDetections(arr1, arr2)       — merge + deduplicate two arrays
+ *   detectPatternPII(text)            — regex-only (backward compat)
  */
 
+import { detectPII } from './piiDetector';
 import { applyContextAwareFiltering } from './contextAwareDetection';
 
-// Pattern-based PII that ML can't detect
-const PATTERN_REGEX = {
-  email: /\b[a-zA-Z0-9][a-zA-Z0-9._%+-]{0,63}@[a-zA-Z0-9][a-zA-Z0-9.-]{0,253}\.[a-zA-Z]{2,}\b/gi,
-  phone: /\+?\d{1,4}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b|\b\d{10,14}\b|\b\(\d{3}\)[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
-  ssn: /\b(SSN|Social Security|Social Security Number|SS#)\s*:?\s*(?!000|666|9\d{2})\d{3}[-\s]?(?!00)\d{2}[-\s]?(?!0000)\d{4}\b/gi,
-  credit_card: /\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4,6}[-\s]?\d{4,5}[-\s]?\d{3,4}\b/g,
-  ip: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g,
-  url: /(https?:\/\/[^\s,)]+)|(www\.[^\s,)]+)|([a-z0-9-]+\.(com|org|net|io|dev|app|in|co\.in)\/[^\s,)]+)|((linkedin|github|twitter|facebook|instagram|medium|behance)\.com\/[^\s,)]+)|(\b[a-z0-9-]+\.(com|org|net|io|dev|app)\b)/gi,
-  address: /\b\d+[-/,]?\s*[A-Z][a-z]+(\s+[A-Z][a-z]+){0,3}\s+(Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Place|Pl|Parkway|Pkwy|Nagar|Colony|Extension|Ext|Cross|Main)\b/gi,
-  dob: /\b(DOB|Date of Birth|Born|Birth Date|Birthday)\s*:?\s*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/gi,
-  passport: /\b(Passport|Passport No|Passport Number)\s*:?\s*[A-Z]{1,2}[0-9]{6,9}\b/gi,
-  bank_account: /\b(Account|Account No|Account Number|A\/C|IBAN)\s*:?\s*[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b|\b(Account|Account No|Account Number|A\/C)\s*:?\s*\d{9,18}\b/gi,
-  tax_id: /\b(EIN|Tax ID|TIN)\s*:?\s*\d{2}[-\s]?\d{7}\b|\b(PAN|PAN No|PAN Number|PAN Card)\s*:?\s*[A-Z]{5}\d{4}[A-Z]\b|\b(Aadhaar|Aadhar|UID)\s*:?\s*\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/gi,
-  age: /\b(Age|age)\s*:?\s*\d{1,3}\b|\b\d{1,3}\s+years?\s+old\b/gi,
-};
-
-const PATTERN_REPLACEMENTS = {
-  email: '[email redacted]',
-  phone: '[phone redacted]',
-  ssn: '[SSN redacted]',
-  credit_card: '[card redacted]',
-  ip: '[IP redacted]',
-  url: '[URL redacted]',
-  address: '[address redacted]',
-  dob: '[DOB redacted]',
-  passport: '[passport redacted]',
-  bank_account: '[account redacted]',
-  tax_id: '[tax ID redacted]',
-  age: '[age redacted]',
-};
+// ─── Pattern-only detection (re-export for backward compat) ────────────────────
 
 /**
- * Detect pattern-based PII using regex
- * @param {string} text - Text to analyze
- * @returns {Array} Array of detected PII entities
+ * Run regex-based detection only. Equivalent to `detectPII` from piiDetector.js.
  */
 export function detectPatternPII(text) {
-  if (!text || text.trim().length === 0) return [];
+  return detectPII(text);
+}
 
-  const detections = [];
-  let idCounter = 0;
+// ─── Merge & Dedup ─────────────────────────────────────────────────────────────
 
-  // Detect each pattern type
-  for (const [type, pattern] of Object.entries(PATTERN_REGEX)) {
-    const regex = new RegExp(pattern.source, pattern.flags);
-    let match;
+/**
+ * Priority order — earlier = higher priority when two detections overlap.
+ * `custom` rules always win; structured patterns beat ML-based generic types.
+ */
+const PRIORITY = [
+  'custom',
+  'email', 'phone', 'ssn', 'credit_card', 'ip', 'dob',
+  'passport', 'bank_account', 'tax_id', 'address', 'age', 'url',
+  'name', 'organization', 'location'
+];
 
-    while ((match = regex.exec(text)) !== null) {
-      const value = match[0];
-      
-      // Skip very short matches (likely false positives)
-      if (type === 'phone' && value.length < 10) continue;
-      if (type === 'email' && value.length < 5) continue;
-
-      detections.push({
-        id: `pattern-${type}-${idCounter++}`,
-        type,
-        value,
-        start: match.index,
-        end: match.index + value.length,
-        confidence: 1.0,
-        redact: true,
-        suggested: PATTERN_REPLACEMENTS[type] || `[${type} redacted]`
-      });
-    }
-  }
-
-  return detections;
+function priorityOf(type) {
+  const idx = PRIORITY.indexOf(type);
+  return idx === -1 ? PRIORITY.length : idx; // unknown types go last
 }
 
 /**
- * Merge ML detections with pattern-based detections
- * Removes overlaps (pattern takes precedence for email/phone, ML for names)
- * @param {Array} mlDetections - Detections from ML model
- * @param {Array} patternDetections - Detections from regex patterns
- * @returns {Array} Merged, deduplicated detections
+ * Merge two arrays of detections, removing overlaps.
+ * When two detections overlap, the one with higher priority wins.
+ * Returns a sorted array with fresh sequential IDs.
  */
-export function mergeDetections(mlDetections, patternDetections) {
-  const all = [...mlDetections, ...patternDetections];
-  
-  // Sort by start position
-  all.sort((a, b) => a.start - b.start);
+export function mergeDetections(detectionsA, detectionsB) {
+  const all = [...(detectionsA || []), ...(detectionsB || [])];
+  if (all.length === 0) return [];
 
-  // Remove overlaps - keep the one with higher priority
+  // Sort by start position, then by priority (higher priority first)
+  all.sort((a, b) => a.start - b.start || priorityOf(a.type) - priorityOf(b.type));
+
   const merged = [];
-  // 'custom' has highest priority — user-defined rules should always win
-  const priorityOrder = ['custom', 'email', 'phone', 'ssn', 'credit_card', 'ip', 'dob', 'passport', 'bank_account', 'tax_id', 'address', 'age', 'url', 'name', 'organization', 'location'];
 
-  for (const detection of all) {
-    // Check if overlaps with any already added detection
-    const overlaps = merged.find(d => 
-      (detection.start >= d.start && detection.start < d.end) ||
-      (detection.end > d.start && detection.end <= d.end) ||
-      (detection.start <= d.start && detection.end >= d.end)
+  for (const det of all) {
+    // Check overlap with already-accepted detections
+    const overlapIdx = merged.findIndex(
+      (d) =>
+        (det.start >= d.start && det.start < d.end) ||
+        (det.end > d.start && det.end <= d.end) ||
+        (det.start <= d.start && det.end >= d.end)
     );
 
-    if (overlaps) {
-      // Keep the one with higher priority
-      const detectionPriority = priorityOrder.indexOf(detection.type);
-      const overlapsPriority = priorityOrder.indexOf(overlaps.type);
-      
-      if (detectionPriority !== -1 && detectionPriority < overlapsPriority) {
-        // Replace with higher priority detection
-        const index = merged.indexOf(overlaps);
-        merged[index] = detection;
+    if (overlapIdx !== -1) {
+      const existing = merged[overlapIdx];
+      // Replace only if new detection has strictly higher priority
+      if (priorityOf(det.type) < priorityOf(existing.type)) {
+        merged[overlapIdx] = det;
       }
-      // Otherwise keep the existing one
+      // Otherwise keep existing
     } else {
-      merged.push(detection);
+      merged.push(det);
     }
   }
 
-  // Sort again by position
+  // Sort by position and assign fresh IDs
   merged.sort((a, b) => a.start - b.start);
 
-  return merged;
+  return merged.map((d, idx) => ({
+    ...d,
+    id: `pii-${idx}`
+  }));
 }
 
+// ─── Full Smart Detection Pipeline ─────────────────────────────────────────────
+
 /**
- * Smart detection combining ML + Regex + Context Analysis
- * @param {string} text - Text to analyze
- * @param {Function} mlDetectFn - ML detection function
- * @returns {Promise<Array>} Combined detections with context-aware filtering
+ * Main entry point used by Redactor.jsx.
+ *
+ * 1. Runs ML detection (names, orgs, locations) + regex (email, phone …) **in parallel**
+ * 2. Merges + deduplicates
+ * 3. Applies context-aware filtering (sets `redact` flag, never removes items)
+ *
+ * @param {string} text          — Document text
+ * @param {Function} mlDetectFn  — `detectPII` from useTransformersPII hook (or null)
+ * @returns {Promise<Array>}     — Merged, context-filtered detections
  */
 export async function detectSmartPII(text, mlDetectFn) {
   if (!text || text.trim().length === 0) return [];
 
-  // Run both in parallel
-  const [mlDetections, patternDetections] = await Promise.all([
-    mlDetectFn ? mlDetectFn(text).catch(() => []) : Promise.resolve([]),
-    Promise.resolve(detectPatternPII(text))
+  // Run both detection strategies in parallel
+  const [mlDetections, regexDetections] = await Promise.all([
+    mlDetectFn
+      ? mlDetectFn(text).catch(() => []) // graceful fallback if ML fails
+      : Promise.resolve([]),
+    Promise.resolve(detectPII(text))
   ]);
 
-  console.log('[SMART DETECTION] ML:', mlDetections.length, 'Pattern:', patternDetections.length);
-
   // Merge and deduplicate
-  const merged = mergeDetections(mlDetections, patternDetections);
+  const merged = mergeDetections(mlDetections, regexDetections);
 
-  console.log('[SMART DETECTION] Merged:', merged.length, 'before context filtering');
-
-  // Apply context-aware filtering to understand what's actually private
+  // Apply context-aware filtering (sets redact flag, keeps all items)
   const contextFiltered = applyContextAwareFiltering(merged, text);
-
-  console.log('[SMART DETECTION] Context-filtered:', contextFiltered.length, 'final detections');
 
   return contextFiltered;
 }

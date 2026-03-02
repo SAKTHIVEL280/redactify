@@ -304,6 +304,8 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
       'bank_account': 'bg-rose-200',
       'tax_id': 'bg-amber-200',
       'age': 'bg-lime-200',
+      'organization': 'bg-sky-200',
+      'location': 'bg-emerald-200',
       'custom': 'bg-fuchsia-200'
     };
     return colorMap[type] || 'bg-gray-200';
