@@ -1,31 +1,149 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Primary Meta Tags -->
+    <title>Redactify — AI-Powered Document Redaction Tool | 100% Local & Private</title>
+    <meta name="title" content="Redactify — AI-Powered Document Redaction Tool | 100% Local & Private" />
+    <meta name="description" content="Redact PII from resumes, contracts, and documents entirely in your browser. AI-powered detection using BERT NER. Zero uploads, zero servers — your data never leaves your device. Supports PDF, DOCX & TXT." />
+    <meta name="keywords" content="document redactor, PII redaction, resume anonymizer, redact personal information, privacy tool, AI document scanner, remove PII from resume, GDPR compliance tool, confidential document redaction, local document processing, browser-based redaction, BERT NER, data privacy, identity protection" />
+    <meta name="author" content="Redactify" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="canonical" href="https://redactify.daeq.in/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://redactify.daeq.in/" />
+    <meta property="og:title" content="Redactify — AI-Powered Document Redaction Tool" />
+    <meta property="og:description" content="Redact PII from resumes and documents entirely in your browser. AI-powered, zero uploads, 100% private. Supports PDF, DOCX & TXT." />
+    <meta property="og:image" content="https://redactify.daeq.in/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Redactify — Privacy-first AI document redaction tool" />
+    <meta property="og:site_name" content="Redactify" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://redactify.daeq.in/" />
+    <meta name="twitter:title" content="Redactify — AI-Powered Document Redaction Tool" />
+    <meta name="twitter:description" content="Redact PII from resumes and documents entirely in your browser. AI-powered, zero uploads, 100% private." />
+    <meta name="twitter:image" content="https://redactify.daeq.in/og-image.png" />
+    <meta name="twitter:image:alt" content="Redactify — Privacy-first AI document redaction tool" />
+
+    <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Redact confidential information from business documents entirely in your browser. Privacy-first PII redaction for companies, legal teams, and professionals. Zero uploads, 100% local." />
-    <meta name="keywords" content="document redactor, PII redaction, confidential documents, business document anonymizer, privacy tool" />
-    
+
     <!-- Security Headers -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://*.huggingface.co https://cdn-lfs.huggingface.co; frame-src https://checkout.razorpay.com https://api.razorpay.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
-    
-    <title>Redactify - Privacy-First Document Anonymizer</title>
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#ef4444" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Redactify" />
+    <meta name="application-name" content="Redactify" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!-- manifest is injected automatically by vite-plugin-pwa -->
-    
+
+    <!-- Structured Data: SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Redactify",
+      "url": "https://redactify.daeq.in",
+      "description": "AI-powered document redaction tool that runs entirely in your browser. Detects and redacts PII from resumes, contracts, and documents. Zero uploads, 100% private.",
+      "applicationCategory": "SecurityApplication",
+      "operatingSystem": "Any (Browser-based)",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "INR",
+        "description": "Free tier with full PII detection and TXT export. Pro license for PDF and DOCX exports."
+      },
+      "featureList": [
+        "AI-powered PII detection using BERT NER",
+        "100% browser-based — no data uploads",
+        "PDF, DOCX, TXT support",
+        "Format-preserving exports",
+        "Batch processing",
+        "Copyable text layer in redacted PDFs"
+      ],
+      "screenshot": "https://redactify.daeq.in/og-image.png",
+      "softwareVersion": "1.0.0",
+      "creator": {
+        "@type": "Organization",
+        "name": "Redactify"
+      }
+    }
+    </script>
+
+    <!-- Structured Data: WebSite (for search box) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Redactify",
+      "url": "https://redactify.daeq.in",
+      "description": "Privacy-first AI document redaction tool"
+    }
+    </script>
+
+    <!-- Structured Data: FAQPage (boosts rich snippets) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is Redactify safe to use with sensitive documents?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Redactify processes everything locally in your browser. Your files are never uploaded to any server. The AI model runs entirely on your device using Web Workers."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What types of PII does Redactify detect?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Redactify detects names, email addresses, phone numbers, physical addresses, Social Security numbers, credit card numbers, dates of birth, passport numbers, IP addresses, URLs, bank account numbers, tax IDs, and organization names."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What file formats does Redactify support?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Redactify supports PDF, DOCX (Microsoft Word), and plain text (TXT) files. Exported files preserve the original formatting of the source document."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Redactify free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Redactify offers a free tier with full PII detection and TXT export. A one-time Pro license unlocks PDF and DOCX export with original formatting preserved."
+          }
+        }
+      ]
+    }
+    </script>
+
     <style>
       body {
         font-family: 'Inter', system-ui, -apple-system, sans-serif;

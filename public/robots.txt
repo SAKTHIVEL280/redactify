@@ -1,0 +1,7 @@
+# Redactify — https://redactify.daeq.in
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://redactify.daeq.in/sitemap.xml
