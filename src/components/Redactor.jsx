@@ -268,11 +268,9 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
       setText(content);
 
       // Use smart detection: ML (names, orgs, locations) + Regex (email, phone, SSN)
-      console.log('[DEBUG] Calling smart detection...');
       const smartDetections = await detectSmartPII(content, detectWithML && !modelError ? detectWithML : null);
       const customDetections = customRules.length > 0 ? applyCustomRules(content, customRules) : [];
       const detected = mergeDetections(smartDetections, customDetections);
-      console.log('[DEBUG] Smart detections:', smartDetections.length, 'Custom:', customDetections.length, 'Total:', detected.length);
       
       // Check if aborted
       if (signal.aborted) return;

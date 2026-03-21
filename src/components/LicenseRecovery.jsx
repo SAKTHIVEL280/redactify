@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, Check } from 'lucide-react';
-import { recoverLicenseByPaymentId, recoverLicenseByEmail } from '../utils/supabaseLicense';
 import { storeProKey } from '../utils/proLicenseDB';
 
 const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
@@ -94,8 +93,8 @@ const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
         if (onSuccess) onSuccess();
         setLoading(false);
       } else {
-        // Fallback: use the old recovery flow
-        await handleRecover();
+        setStatus({ type: 'error', message: 'No license found for this account. Please contact support.' });
+        setLoading(false);
       }
     } catch (err) {
       setStatus({ type: 'error', message: 'Verification failed' });
@@ -108,32 +107,32 @@ const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
     setStatus({ type: '', message: '' });
 
     try {
-      let result;
-      if (method === 'payment') {
-        result = await recoverLicenseByPaymentId(input.trim());
-      } else {
-        result = await recoverLicenseByEmail(input.trim());
+      const response = await fetch('/api/recover-by-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: input.trim() })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus({ type: 'error', message: data.error || 'No license found.' });
+        setLoading(false);
+        return;
       }
 
-      if (result.success) {
-        const license = method === 'email' ? result.licenses[0] : result;
-        
-        await storeProKey({
-          key: license.license_key || license.licenseKey,
-          orderId: 'recovered',
-          paymentId: license.payment_id || input,
-          purchasedAt: license.purchased_at || license.purchasedAt,
-        });
+      await storeProKey({
+        key: data.licenseKey,
+        orderId: data.orderId || 'recovered',
+        paymentId: data.paymentId || input,
+        purchasedAt: data.purchasedAt || new Date().toISOString(),
+      });
 
-        setStatus({ type: 'success', message: 'License recovered successfully!' });
-        setTimeout(() => {
-          if (onSuccess) onSuccess();
-          onClose();
-          window.location.reload();
-        }, 1500);
-      } else {
-        setStatus({ type: 'error', message: result.error || 'No license found.' });
-      }
+      setStatus({ type: 'success', message: 'License recovered successfully!' });
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+        onClose();
+        window.location.reload();
+      }, 1500);
     } catch (err) {
       setStatus({ type: 'error', message: 'Recovery failed. Please try again.' });
     } finally {

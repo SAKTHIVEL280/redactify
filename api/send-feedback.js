@@ -36,12 +36,18 @@ function isValidEmail(email) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app').split(',');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-    res.setHeader('Access-Control-Allow-Origin', origin || allowedOrigins[0]);
+  if (origin && !allowedOrigins.includes(origin)) {
+    return res.status(403).json({ error: 'Origin not allowed' });
   }
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -61,6 +67,12 @@ export default async function handler(req, res) {
   }
 
   try {
+    const feedbackTo = process.env.FEEDBACK_TO_EMAIL;
+    const senderEmail = process.env.FEEDBACK_FROM_EMAIL || 'onboarding@resend.dev';
+    if (!feedbackTo) {
+      return res.status(500).json({ error: 'Feedback destination not configured' });
+    }
+
     const { type, email, subject, message, attachmentType } = req.body;
 
     // Validation
@@ -109,8 +121,8 @@ Timestamp: ${new Date().toISOString()}
 
     // Send email using Resend
     const data = await resend.emails.send({
-      from: 'Redactify <onboarding@resend.dev>', // Using Resend's onboarding domain (works immediately)
-      to: ['sakthivel.hsr06@gmail.com'], // Your email for receiving feedback
+      from: `Redactify <${senderEmail}>`,
+      to: [feedbackTo],
       replyTo: sanitizedEmail || undefined,
       subject: `[Redactify] ${feedbackTypeLabels[type]}: ${sanitizedSubject || 'No subject'}`,
       text: emailContent,

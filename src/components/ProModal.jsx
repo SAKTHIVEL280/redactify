@@ -3,7 +3,6 @@ import useRazorpay from 'react-razorpay';
 import { X, Check, Shield, Lock } from 'lucide-react';
 import axios from 'axios';
 import { storeProKey } from '../utils/proLicenseDB';
-import { storeLicenseInSupabase } from '../utils/supabaseLicense';
 
 const ProModal = ({ isOpen, onClose, onSuccess }) => {
   const [Razorpay] = useRazorpay();
@@ -13,7 +12,6 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
   const [email, setEmail] = useState('');
   const [savedLicenseData, setSavedLicenseData] = useState(null);
 
-  const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || 'rzp_test_XXXXX';
   const PRICE = 159900; // ₹1,599 in paise
 
   // ESC key to close modal
@@ -33,7 +31,7 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
 
     try {
       const { data: orderData } = await axios.post('/api/create-order', {
-        amount: 159900,
+        amount: PRICE,
         currency: 'INR'
       });
 
@@ -91,16 +89,20 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleEmailSave = async () => {
     if (!savedLicenseData) return;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      if (onSuccess) onSuccess(savedLicenseData);
+      onClose();
+      return;
+    }
+
     setLoading(true);
     try {
-      const supabaseData = {
+      await axios.post('/api/save-license-email', {
         licenseKey: savedLicenseData.key,
-        paymentId: savedLicenseData.paymentId,
-        orderId: savedLicenseData.orderId,
-        email: email.trim() || null,
-        purchasedAt: savedLicenseData.purchasedAt
-      };
-      await storeLicenseInSupabase(supabaseData);
+        email: normalizedEmail,
+      });
       if (onSuccess) onSuccess(savedLicenseData);
       onClose();
     } catch (err) {

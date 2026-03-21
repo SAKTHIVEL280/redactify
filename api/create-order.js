@@ -33,14 +33,28 @@ function checkRateLimit(ip) {
   return { allowed: true, remaining: MAX_REQUESTS - rateLimitStore[ip].count };
 }
 
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.headers['x-real-ip'] || 'unknown';
+}
+
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app').split(',');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-    res.setHeader('Access-Control-Allow-Origin', origin || allowedOrigins[0]);
+  if (origin && !allowedOrigins.includes(origin)) {
+    return res.status(403).json({ error: 'Origin not allowed' });
   }
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -53,7 +67,7 @@ export default async function handler(req, res) {
   }
 
   // Rate limiting
-  const ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown';
+  const ip = getClientIp(req);
   const rateLimit = checkRateLimit(ip);
   
   res.setHeader('X-RateLimit-Limit', MAX_REQUESTS);

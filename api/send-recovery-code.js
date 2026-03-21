@@ -4,7 +4,8 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Supabase REST API helper
 async function supabaseQuery(endpoint, method = 'GET', body = null) {
-  const url = `${process.env.VITE_SUPABASE_URL}/rest/v1/${endpoint}`;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const url = `${supabaseUrl}/rest/v1/${endpoint}`;
   const options = {
     method,
     headers: {
@@ -26,12 +27,18 @@ async function supabaseQuery(endpoint, method = 'GET', body = null) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app').split(',');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-    res.setHeader('Access-Control-Allow-Origin', origin || allowedOrigins[0]);
+  if (origin && !allowedOrigins.includes(origin)) {
+    return res.status(403).json({ error: 'Origin not allowed' });
   }
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -45,6 +52,10 @@ export default async function handler(req, res) {
   }
 
   const { email } = req.body;
+
+  if (!process.env.SUPABASE_SERVICE_KEY || !(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)) {
+    return res.status(500).json({ error: 'Recovery backend not configured' });
+  }
 
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'Valid email required' });

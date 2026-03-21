@@ -33,6 +33,14 @@ function checkRateLimit(ip) {
   return { allowed: true, remaining: MAX_REQUESTS - rateLimitStore[ip].count };
 }
 
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.headers['x-real-ip'] || 'unknown';
+}
+
 // Generate license key using cryptographically secure random bytes
 function generateLicenseKey() {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -45,12 +53,18 @@ function generateLicenseKey() {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app').split(',');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-    res.setHeader('Access-Control-Allow-Origin', origin || allowedOrigins[0]);
+  if (origin && !allowedOrigins.includes(origin)) {
+    return res.status(403).json({ error: 'Origin not allowed', success: false });
   }
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -63,7 +77,7 @@ export default async function handler(req, res) {
   }
 
   // Rate limiting
-  const ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown';
+  const ip = getClientIp(req);
   const rateLimit = checkRateLimit(ip);
   
   res.setHeader('X-RateLimit-Limit', MAX_REQUESTS);
@@ -80,8 +94,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('Verify API called');
-    
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -90,7 +102,6 @@ export default async function handler(req, res) {
 
     // Validate input
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      console.log('Missing required fields');
       return res.status(400).json({ 
         error: 'Missing required fields',
         success: false 
@@ -107,34 +118,28 @@ export default async function handler(req, res) {
     }
 
     // Verify signature
-    console.log('Verifying signature...');
     const generatedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex');
 
     if (generatedSignature !== razorpay_signature) {
-      console.log('Signature mismatch');
       return res.status(400).json({ 
         error: 'Invalid signature',
         success: false 
       });
     }
-
-    console.log('Signature verified successfully');
     
     // Payment verified successfully
     // Generate license key
     const licenseKey = generateLicenseKey();
-    console.log('License key generated successfully');
 
     // Optional: Store in Supabase for server-side verification
-    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    const supabaseUrlEnv = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    if (supabaseUrlEnv && process.env.SUPABASE_SERVICE_KEY) {
       try {
-        console.log('Attempting to store in Supabase...');
-        
         // Use Supabase REST API directly to avoid ES module issues
-        const supabaseUrl = process.env.VITE_SUPABASE_URL;
+        const supabaseUrl = supabaseUrlEnv;
         const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
         
         const response = await fetch(`${supabaseUrl}/rest/v1/pro_licenses`, {
@@ -157,15 +162,11 @@ export default async function handler(req, res) {
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Supabase insert error:', response.status, errorText);
-        } else {
-          console.log('Supabase insert successful');
         }
       } catch (dbError) {
         // Log but don't fail - client will still get license key
         console.error('Supabase storage error (non-critical):', dbError.message || dbError);
       }
-    } else {
-      console.log('Supabase not configured, skipping storage');
     }
 
     return res.status(200).json({
