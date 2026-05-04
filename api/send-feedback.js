@@ -5,22 +5,24 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // Simple in-memory rate limiting (use Redis in production)
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 3;
+const MAX_REQUESTS_PER_WINDOW = 5;
 
 function checkRateLimit(identifier) {
   const now = Date.now();
   const userRequests = rateLimitMap.get(identifier) || [];
-  
+
   // Remove expired entries
   const validRequests = userRequests.filter(time => now - time < RATE_LIMIT_WINDOW);
-  
+
   if (validRequests.length >= MAX_REQUESTS_PER_WINDOW) {
-    return false;
+    const resetTime = validRequests[0] + RATE_LIMIT_WINDOW;
+    return { allowed: false, remaining: 0, resetTime };
   }
-  
+
   validRequests.push(now);
   rateLimitMap.set(identifier, validRequests);
-  return true;
+  const resetTime = validRequests[0] + RATE_LIMIT_WINDOW;
+  return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - validRequests.length, resetTime };
 }
 
 // Input sanitization
@@ -36,7 +38,7 @@ function isValidEmail(email) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -62,8 +64,19 @@ export default async function handler(req, res) {
 
   // Rate limiting by IP
   const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
-  if (!checkRateLimit(clientIp)) {
-    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  const rateLimit = checkRateLimit(clientIp);
+  res.setHeader('X-RateLimit-Limit', MAX_REQUESTS_PER_WINDOW);
+  res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
+
+  if (!rateLimit.allowed) {
+    const resetIn = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
+    res.setHeader('X-RateLimit-Reset', rateLimit.resetTime);
+    res.setHeader('Retry-After', resetIn);
+    return res.status(429).json({
+      error: 'Too many requests',
+      message: `Please try again in ${resetIn} seconds`,
+      retryAfter: resetIn
+    });
   }
 
   try {

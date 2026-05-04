@@ -43,7 +43,7 @@ function getClientIp(req) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -76,6 +76,7 @@ export default async function handler(req, res) {
   if (!rateLimit.allowed) {
     const resetIn = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
     res.setHeader('X-RateLimit-Reset', rateLimit.resetTime);
+    res.setHeader('Retry-After', resetIn);
     return res.status(429).json({ 
       error: 'Too many requests', 
       message: `Please try again in ${resetIn} seconds`,

@@ -10,7 +10,7 @@ import crypto from 'crypto';
 // Simple rate limiting (in-memory)
 const rateLimitStore = {};
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 10; // 10 verification attempts per minute per IP
+const MAX_REQUESTS = 5; // 5 verification attempts per minute per IP
 
 function checkRateLimit(ip) {
   const now = Date.now();
@@ -53,7 +53,7 @@ function generateLicenseKey() {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -86,9 +86,11 @@ export default async function handler(req, res) {
   if (!rateLimit.allowed) {
     const resetIn = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
     res.setHeader('X-RateLimit-Reset', rateLimit.resetTime);
+    res.setHeader('Retry-After', resetIn);
     return res.status(429).json({ 
       error: 'Too many verification attempts', 
       message: `Please try again in ${resetIn} seconds`,
+      retryAfter: resetIn,
       success: false 
     });
   }
