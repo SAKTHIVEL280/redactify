@@ -10,13 +10,22 @@ const LOCALSTORAGE_KEY = 'redactify_pro_license_encrypted';
 // Track if we're using fallback storage
 let useLocalStorageFallback = false;
 
-// Derive encryption key from a stable browser fingerprint
-// Uses properties that don't change with resolution, display, or browser updates
+// Derive encryption key from a persistent vault salt
+// Prevents decryption failures when browser language, locale, or platform changes
 async function getEncryptionKey() {
-  // Use only truly stable factors: app-specific salt + language + platform
-  // Removed: screen.width/height/colorDepth (changes with monitors/resolution)
-  // Removed: navigator.userAgent (changes on browser updates)
-  const stableFingerprint = 'redactify-pro-v1-' + navigator.language + '-' + (navigator.platform || 'unknown');
+  let salt = null;
+  try {
+    salt = localStorage.getItem('redactify_vault_salt');
+    if (!salt) {
+      const randomBytes = crypto.getRandomValues(new Uint8Array(16));
+      salt = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('redactify_vault_salt', salt);
+    }
+  } catch (e) {
+    salt = 'redactify-pro-fallback-vault-key';
+  }
+
+  const stableFingerprint = 'redactify-pro-v1-' + salt;
   const encoder = new TextEncoder();
   const data = encoder.encode(stableFingerprint);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -49,8 +58,8 @@ async function encryptData(data) {
     combined.set(iv, 0);
     combined.set(new Uint8Array(encryptedBuffer), iv.length);
     
-    // Convert to base64 for storage
-    return btoa(String.fromCharCode(...combined));
+    // Convert to base64 for storage (stack-safe for large buffers)
+    return btoa(Array.from(combined, (b) => String.fromCharCode(b)).join(''));
   } catch (error) {
     console.error('Encryption error:', error);
     throw error;

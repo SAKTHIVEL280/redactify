@@ -341,6 +341,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
     }
   }, [customRules, onPIIDetected, detectWithML]);
 
+  const [previewMode, setPreviewMode] = useState(false);
+
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-black">
       {/* AI Model Loading Overlay - only for fresh downloads (not cached) */}
@@ -516,11 +518,21 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                   </div>
                 )}
 
+                {!uploadedFile && text && (
+                  <button
+                    onClick={() => setPreviewMode(!previewMode)}
+                    className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-700 rounded-lg transition-all"
+                  >
+                    {previewMode ? 'Edit Text' : 'Preview Document'}
+                  </button>
+                )}
+
                 {uploadedFile && (
                   <button
                     onClick={() => {
                       setUploadedFile(null);
                       setFileType(null);
+                      setPreviewMode(false);
                     }}
                     className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-700 rounded-lg transition-all"
                   >
@@ -542,6 +554,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                     setText('');
                     setUploadedFile(null);
                     setFileType(null);
+                    setPreviewMode(false);
                     onPIIDetected([], '', null, null);
                   }}
                   className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
@@ -557,8 +570,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
           <div className="flex-1 min-h-0 bg-black">
             <div className="h-full max-w-full mx-auto">
               <div className="relative h-full bg-zinc-950 overflow-hidden">
-                {text && detectedPII.length > 0 ? (
-                  // Document Viewer - Shows document with PII highlights (for both uploaded files and manual text)
+                {uploadedFile || previewMode ? (
+                  // Document Viewer - Renders for uploaded documents or when previewMode is enabled
                   <DocumentViewer
                     file={uploadedFile}
                     fileType={fileType || 'txt'}
@@ -568,19 +581,8 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                     selectedPIIId={selectedPIIId}
                     onSelectPII={onSelectPII}
                   />
-                ) : uploadedFile ? (
-                  // Document Viewer - Shows original document without highlights (no PII detected yet)
-                  <DocumentViewer
-                    file={uploadedFile}
-                    fileType={fileType}
-                    text={text}
-                    detectedPII={[]}
-                    onTogglePII={onTogglePII}
-                    selectedPIIId={selectedPIIId}
-                    onSelectPII={onSelectPII}
-                  />
                 ) : (
-                  // Text Editor - For manual text input
+                  // Text Editor - For manual text input & editing
                   <div className="relative h-full">
                     <textarea
                       value={text}

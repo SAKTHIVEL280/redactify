@@ -1,40 +1,7 @@
 import { Resend } from 'resend';
+import { createRateLimiter, getClientIp, applyRateLimit } from './lib/rateLimit.js';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// Simple rate limiting (in-memory)
-const rateLimitStore = {};
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 5; // 5 requests per minute per IP
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-
-  if (!rateLimitStore[ip]) {
-    rateLimitStore[ip] = { count: 1, resetTime: now + RATE_LIMIT_WINDOW };
-    return { allowed: true, remaining: MAX_REQUESTS - 1 };
-  }
-
-  if (now > rateLimitStore[ip].resetTime) {
-    rateLimitStore[ip] = { count: 1, resetTime: now + RATE_LIMIT_WINDOW };
-    return { allowed: true, remaining: MAX_REQUESTS - 1 };
-  }
-
-  if (rateLimitStore[ip].count >= MAX_REQUESTS) {
-    return { allowed: false, remaining: 0, resetTime: rateLimitStore[ip].resetTime };
-  }
-
-  rateLimitStore[ip].count++;
-  return { allowed: true, remaining: MAX_REQUESTS - rateLimitStore[ip].count };
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0].trim();
-  }
-  return req.headers['x-real-ip'] || 'unknown';
-}
+const checkRateLimit = createRateLimiter(60 * 1000, 5); // 5 req/min/IP
 
 // Supabase REST API helper
 async function supabaseQuery(endpoint, method = 'GET', body = null) {
@@ -61,15 +28,18 @@ async function supabaseQuery(endpoint, method = 'GET', body = null) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
   const origin = req.headers.origin;
-  if (origin && !allowedOrigins.includes(origin)) {
-    return res.status(403).json({ error: 'Origin not allowed' });
-  }
-  if (origin && allowedOrigins.includes(origin)) {
+  const isVercelPreview = origin && /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin);
+  const isAllowed = !origin || allowedOrigins.includes(origin) || isVercelPreview || process.env.NODE_ENV !== 'production';
+
+  if (origin) {
+    if (!isAllowed) {
+      return res.status(403).json({ error: 'Origin not allowed' });
+    }
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   }
@@ -85,30 +55,19 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const ip = getClientIp(req);
-  const rateLimit = checkRateLimit(ip);
+  if (applyRateLimit(req, res, checkRateLimit, 5)) return;
 
-  res.setHeader('X-RateLimit-Limit', MAX_REQUESTS);
-  res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
-
-  if (!rateLimit.allowed) {
-    const resetIn = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
-    res.setHeader('X-RateLimit-Reset', rateLimit.resetTime);
-    res.setHeader('Retry-After', resetIn);
-    return res.status(429).json({
-      error: 'Too many requests',
-      message: `Please try again in ${resetIn} seconds`,
-      retryAfter: resetIn
-    });
-  }
-
-  const { email } = req.body;
+  const { email } = req.body || {};
 
   if (!process.env.SUPABASE_SERVICE_KEY || !(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)) {
     return res.status(500).json({ error: 'Recovery backend not configured' });
   }
 
-  if (!email || !email.includes('@')) {
+  if (!process.env.RESEND_API_KEY) {
+    return res.status(500).json({ error: 'Email service not configured' });
+  }
+
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
     return res.status(400).json({ error: 'Valid email required' });
   }
 
@@ -155,10 +114,14 @@ export default async function handler(req, res) {
       attempts: 0
     });
 
+    // Lazy Resend initialization
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
     // Send email via Resend
     await resend.emails.send({
-      from: 'Redactify <onboarding@resend.dev>',
-      to: [email],
+      from: `Redactify <${fromAddress}>`,
+      to: [emailLower],
       subject: 'Your Redactify License Recovery Code',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -175,9 +138,10 @@ export default async function handler(req, res) {
       `,
     });
 
-    res.status(200).json({ success: true, message: 'Verification code sent to your email' });
+    return res.status(200).json({ success: true, message: 'Verification code sent to your email' });
   } catch (error) {
     console.error('Error sending verification code:', error);
-    res.status(500).json({ error: 'Failed to send verification code' });
+    return res.status(500).json({ error: 'Failed to send verification code' });
   }
 }
+

@@ -6,40 +6,9 @@
  */
 
 import crypto from 'crypto';
+import { createRateLimiter, getClientIp, applyRateLimit } from './lib/rateLimit.js';
 
-// Simple rate limiting (in-memory)
-const rateLimitStore = {};
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 5; // 5 verification attempts per minute per IP
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  
-  if (!rateLimitStore[ip]) {
-    rateLimitStore[ip] = { count: 1, resetTime: now + RATE_LIMIT_WINDOW };
-    return { allowed: true, remaining: MAX_REQUESTS - 1 };
-  }
-
-  if (now > rateLimitStore[ip].resetTime) {
-    rateLimitStore[ip] = { count: 1, resetTime: now + RATE_LIMIT_WINDOW };
-    return { allowed: true, remaining: MAX_REQUESTS - 1 };
-  }
-
-  if (rateLimitStore[ip].count >= MAX_REQUESTS) {
-    return { allowed: false, remaining: 0, resetTime: rateLimitStore[ip].resetTime };
-  }
-
-  rateLimitStore[ip].count++;
-  return { allowed: true, remaining: MAX_REQUESTS - rateLimitStore[ip].count };
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0].trim();
-  }
-  return req.headers['x-real-ip'] || 'unknown';
-}
+const checkRateLimit = createRateLimiter(60 * 1000, 5); // 5 req/min/IP
 
 // Generate license key using cryptographically secure random bytes
 function generateLicenseKey() {
@@ -53,15 +22,17 @@ function generateLicenseKey() {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
   const origin = req.headers.origin;
-  if (origin && !allowedOrigins.includes(origin)) {
+  const isVercelPreview = origin && /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin);
+  const isAllowed = origin && (allowedOrigins.includes(origin) || isVercelPreview || process.env.NODE_ENV !== 'production');
+  if (origin && !isAllowed) {
     return res.status(403).json({ error: 'Origin not allowed', success: false });
   }
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && isAllowed) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   }
@@ -77,23 +48,7 @@ export default async function handler(req, res) {
   }
 
   // Rate limiting
-  const ip = getClientIp(req);
-  const rateLimit = checkRateLimit(ip);
-  
-  res.setHeader('X-RateLimit-Limit', MAX_REQUESTS);
-  res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
-
-  if (!rateLimit.allowed) {
-    const resetIn = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
-    res.setHeader('X-RateLimit-Reset', rateLimit.resetTime);
-    res.setHeader('Retry-After', resetIn);
-    return res.status(429).json({ 
-      error: 'Too many verification attempts', 
-      message: `Please try again in ${resetIn} seconds`,
-      retryAfter: resetIn,
-      success: false 
-    });
-  }
+  if (applyRateLimit(req, res, checkRateLimit, 5)) return;
 
   try {
     const {
@@ -119,38 +74,70 @@ export default async function handler(req, res) {
       });
     }
 
-    // Verify signature
+    // Verify signature using timing-safe comparison to prevent timing side-channel attacks
     const generatedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex');
 
-    if (generatedSignature !== razorpay_signature) {
+    const sigBuffer = Buffer.from(razorpay_signature, 'utf8');
+    const genBuffer = Buffer.from(generatedSignature, 'utf8');
+
+    if (sigBuffer.length !== genBuffer.length || !crypto.timingSafeEqual(sigBuffer, genBuffer)) {
       return res.status(400).json({ 
         error: 'Invalid signature',
         success: false 
       });
     }
+
+    const supabaseUrlEnv = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+    // Idempotency check: if license already exists for this payment_id, return existing license
+    if (supabaseUrlEnv && supabaseKey) {
+      try {
+        const checkResponse = await fetch(
+          `${supabaseUrlEnv}/rest/v1/pro_licenses?payment_id=eq.${encodeURIComponent(razorpay_payment_id)}&is_active=eq.true&select=license_key,payment_id,order_id`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`
+            }
+          }
+        );
+        if (checkResponse.ok) {
+          const existing = await checkResponse.json();
+          if (Array.isArray(existing) && existing.length > 0) {
+            return res.status(200).json({
+              success: true,
+              licenseKey: existing[0].license_key,
+              paymentId: existing[0].payment_id,
+              orderId: existing[0].order_id,
+              reissued: true
+            });
+          }
+        }
+      } catch (checkError) {
+        console.error('Idempotency check error:', checkError.message || checkError);
+      }
+    }
     
     // Payment verified successfully
-    // Generate license key
+    // Generate new license key
     const licenseKey = generateLicenseKey();
 
-    // Optional: Store in Supabase for server-side verification
-    const supabaseUrlEnv = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    if (supabaseUrlEnv && process.env.SUPABASE_SERVICE_KEY) {
+    // Store in Supabase for server-side verification and recovery
+    if (supabaseUrlEnv && supabaseKey) {
       try {
-        // Use Supabase REST API directly to avoid ES module issues
-        const supabaseUrl = supabaseUrlEnv;
-        const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-        
-        const response = await fetch(`${supabaseUrl}/rest/v1/pro_licenses`, {
+        const response = await fetch(`${supabaseUrlEnv}/rest/v1/pro_licenses`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'apikey': supabaseKey,
             'Authorization': `Bearer ${supabaseKey}`,
-            'Prefer': 'return=minimal'
+            'Prefer': 'return=representation'
           },
           body: JSON.stringify({
             license_key: licenseKey,
@@ -164,6 +151,37 @@ export default async function handler(req, res) {
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Supabase insert error:', response.status, errorText);
+
+          // If duplicate key conflict (409), re-fetch existing saved key so client gets valid key
+          if (response.status === 409) {
+            try {
+              const retryRes = await fetch(
+                `${supabaseUrlEnv}/rest/v1/pro_licenses?payment_id=eq.${encodeURIComponent(razorpay_payment_id)}&select=license_key,payment_id,order_id`,
+                {
+                  method: 'GET',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${supabaseKey}`
+                  }
+                }
+              );
+              if (retryRes.ok) {
+                const retryData = await retryRes.json();
+                if (Array.isArray(retryData) && retryData.length > 0) {
+                  return res.status(200).json({
+                    success: true,
+                    licenseKey: retryData[0].license_key,
+                    paymentId: retryData[0].payment_id,
+                    orderId: retryData[0].order_id,
+                    reissued: true
+                  });
+                }
+              }
+            } catch (retryErr) {
+              console.error('Retry fetch error:', retryErr);
+            }
+          }
         }
       } catch (dbError) {
         // Log but don't fail - client will still get license key
@@ -182,7 +200,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ 
       error: 'Verification failed',
       success: false,
-      message: error.message 
+      message: process.env.NODE_ENV === 'production' ? 'Verification failed' : error.message
     });
   }
 }
+

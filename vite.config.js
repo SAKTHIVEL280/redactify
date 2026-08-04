@@ -67,8 +67,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom'],
           pdfjs: ['pdfjs-dist'],
-          docx: ['docx', 'mammoth'],
-          ai: ['@xenova/transformers']
+          docx: ['docx', 'mammoth']
         }
       }
     },

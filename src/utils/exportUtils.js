@@ -124,9 +124,21 @@ function applyRedactionsToXML(xmlDoc, piiItems) {
   for (const [value, { replacement, redactCount, totalCount }] of sortedValues) {
     const occurrences = [];
     let searchFrom = 0;
+    const isAlphanumeric = /^[a-zA-Z0-9]+$/.test(value);
+
     while (searchFrom <= xmlText.length - value.length) {
       const idx = xmlText.indexOf(value, searchFrom);
       if (idx === -1) break;
+
+      if (isAlphanumeric) {
+        const charBefore = idx > 0 ? xmlText[idx - 1] : ' ';
+        const charAfter = idx + value.length < xmlText.length ? xmlText[idx + value.length] : ' ';
+        if (/[a-zA-Z0-9]/.test(charBefore) || /[a-zA-Z0-9]/.test(charAfter)) {
+          searchFrom = idx + value.length;
+          continue;
+        }
+      }
+
       occurrences.push(idx);
       searchFrom = idx + value.length;
     }
@@ -338,13 +350,13 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], _isP
 
     // ── Strategy 1: Image layer + invisible copyable text layer ────────────
     if (uploadedFile && uploadedFile.type === 'application/pdf' && piiItems.some((p) => p.redact)) {
+      let pdfSrc = null;
       try {
         const arrayBuffer = await uploadedFile.arrayBuffer();
         const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
-        const pdfSrc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+        pdfSrc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
         const newPdf = await PDFDocument.create();
         const textFont = await newPdf.embedFont(StandardFonts.Helvetica);
 
@@ -354,45 +366,49 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], _isP
 
         for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
           const page = await pdfSrc.getPage(pageNum);
-          const tc = await page.getTextContent();
+          try {
+            const tc = await page.getTextContent();
 
-          tc.items.sort((a, b) => {
-            const aY = a.transform[5], bY = b.transform[5];
-            const aX = a.transform[4], bX = b.transform[4];
-            if (Math.abs(bY - aY) <= 5) return aX - bX;
-            return bY - aY;
-          });
-
-          const pageItems = [];
-          let lastY = null;
-
-          tc.items.forEach((item, index) => {
-            const curY = item.transform[5];
-            if (lastY !== null && Math.abs(curY - lastY) > 5) globalOffset += 1;
-
-            const fontSize = Math.abs(item.transform[0]) || 12;
-            pageItems.push({
-              str: item.str,
-              start: globalOffset,
-              end: globalOffset + item.str.length,
-              pdfX: item.transform[4],
-              pdfY: item.transform[5],
-              width: item.width || item.str.length * fontSize * 0.6,
-              height: item.height || fontSize * 1.2,
-              fontSize,
+            tc.items.sort((a, b) => {
+              const aY = a.transform[5], bY = b.transform[5];
+              const aX = a.transform[4], bX = b.transform[4];
+              if (Math.abs(bY - aY) <= 5) return aX - bX;
+              return bY - aY;
             });
 
-            globalOffset += item.str.length;
+            const pageItems = [];
+            let lastY = null;
 
-            if (index < tc.items.length - 1) {
-              const nextY = tc.items[index + 1].transform[5];
-              if (Math.abs(curY - nextY) <= 5) globalOffset += 1;
-            }
-            lastY = curY;
-          });
+            tc.items.forEach((item, index) => {
+              const curY = item.transform[5];
+              if (lastY !== null && Math.abs(curY - lastY) > 5) globalOffset += 1;
 
-          globalOffset += 2;
-          allPageItems.push(pageItems);
+              const fontSize = Math.abs(item.transform[0]) || 12;
+              pageItems.push({
+                str: item.str,
+                start: globalOffset,
+                end: globalOffset + item.str.length,
+                pdfX: item.transform[4],
+                pdfY: item.transform[5],
+                width: item.width || item.str.length * fontSize * 0.6,
+                height: item.height || fontSize * 1.2,
+                fontSize,
+              });
+
+              globalOffset += item.str.length;
+
+              if (index < tc.items.length - 1) {
+                const nextY = tc.items[index + 1].transform[5];
+                if (Math.abs(curY - nextY) <= 5) globalOffset += 1;
+              }
+              lastY = curY;
+            });
+
+            globalOffset += 2;
+            allPageItems.push(pageItems);
+          } finally {
+            if (page && page.cleanup) page.cleanup();
+          }
         }
 
         // ── Render each page ────────────────────────────────────────────────
@@ -401,130 +417,127 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], _isP
 
         for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
           const page = await pdfSrc.getPage(pageNum);
-          const viewport = page.getViewport({ scale: renderScale });
-          const origVP = page.getViewport({ scale: 1.0 });
+          try {
+            const viewport = page.getViewport({ scale: renderScale });
+            const origVP = page.getViewport({ scale: 1.0 });
 
-          // ── a) Canvas render ──────────────────────────────────────────────
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext('2d');
-          await page.render({ canvasContext: ctx, viewport }).promise;
+            // ── a) Canvas render ──────────────────────────────────────────────
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext('2d');
+            await page.render({ canvasContext: ctx, viewport }).promise;
 
-          const pageItems = allPageItems[pageNum - 1];
-          const redactedIndices = new Set();          // track which items are redacted
-          const replacementMap = new Map();           // itemIndex → replacement label
+            const pageItems = allPageItems[pageNum - 1];
+            const redactedIndices = new Set();          // track which items are redacted
+            const replacementMap = new Map();           // itemIndex → replacement label
 
-          // ── b) Find PII & draw black boxes on canvas ──────────────────────
-          for (const pii of piiToRedact) {
-            let overlapping = pageItems.filter(
-              (item) => item.start < pii.end && item.end > pii.start,
-            );
+            // ── b) Find PII & draw black boxes on canvas ──────────────────────
+            for (const pii of piiToRedact) {
+              let overlapping = pageItems.filter(
+                (item) => item.start < pii.end && item.end > pii.start,
+              );
 
-            // Fallback: value-based matching
-            if (overlapping.length === 0 && pii.value) {
-              let runText = '';
-              const itemPos = [];
-              pageItems.forEach((item) => {
-                itemPos.push({ item, start: runText.length });
-                runText += item.str + ' ';
-              });
-              const vIdx = runText.indexOf(pii.value);
-              if (vIdx !== -1) {
-                const vEnd = vIdx + pii.value.length;
-                overlapping = itemPos
-                  .filter((ip) => ip.start < vEnd && ip.start + ip.item.str.length > vIdx)
-                  .map((ip) => ip.item);
-              }
-            }
-
-            if (overlapping.length === 0) continue;
-
-            // Black redaction boxes (burnt into the image)
-            for (const item of overlapping) {
-              redactedIndices.add(pageItems.indexOf(item));
-              const pad = 2;
-              const x = item.pdfX * renderScale - pad;
-              const y = viewport.height - item.pdfY * renderScale - item.height * renderScale - pad;
-              const w = item.width * renderScale + pad * 2;
-              const h = item.height * renderScale + pad * 2;
-              ctx.fillStyle = '#111111';
-              ctx.fillRect(x, y, w, h);
-            }
-
-            // Replacement label (white on black, burnt into image)
-            const first = overlapping[0];
-            const firstIdx = pageItems.indexOf(first);
-            const label = pii.suggested || '[REDACTED]';
-            const labelPx = Math.min(first.fontSize * 0.7, 8) * renderScale;
-            ctx.font = `600 ${labelPx}px "Segoe UI", Helvetica, Arial, sans-serif`;
-            ctx.fillStyle = '#ffffff';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(label, first.pdfX * renderScale + 2, viewport.height - first.pdfY * renderScale - 1);
-
-            if (!replacementMap.has(firstIdx)) {
-              replacementMap.set(firstIdx, label);
-            }
-          }
-
-          // ── c) Embed rendered canvas as page-sized image ──────────────────
-          const imgBytes = await new Promise((resolve, reject) => {
-            canvas.toBlob(async (blob) => {
-              if (!blob) return reject(new Error('Canvas toBlob failed'));
-              resolve(new Uint8Array(await blob.arrayBuffer()));
-            }, 'image/jpeg', 0.95);
-          });
-          // Release canvas memory immediately (important for multi-page PDFs)
-          canvas.width = 0;
-          canvas.height = 0;
-          const jpg = await newPdf.embedJpg(imgBytes);
-
-          const newPage = newPdf.addPage([origVP.width, origVP.height]);
-          newPage.drawImage(jpg, { x: 0, y: 0, width: origVP.width, height: origVP.height });
-
-          // ── d) Invisible text layer for copy-paste ────────────────────────
-          //    Draws each text fragment at its original PDF position with near-
-          //    zero opacity so it is invisible but selectable in any PDF viewer.
-          //    Redacted items are replaced by the label; non-redacted items keep
-          //    their original text.
-          for (let i = 0; i < pageItems.length; i++) {
-            const item = pageItems[i];
-
-            if (redactedIndices.has(i)) {
-              // Emit replacement label once (on the first fragment of the PII
-              // span); skip subsequent fragments that belong to the same span.
-              if (replacementMap.has(i)) {
-                const safeLabel = sanitizeForPDF(replacementMap.get(i));
-                if (safeLabel) {
-                  try {
-                    newPage.drawText(safeLabel, {
-                      x: item.pdfX,
-                      y: item.pdfY,
-                      size: Math.max(Math.min(item.fontSize * 0.75, 10), 4),
-                      font: textFont,
-                      color: rgb(0, 0, 0),
-                      opacity: 0.01,
-                    });
-                  } catch (_) { /* skip unencodable text */ }
+              // Fallback: value-based matching
+              if (overlapping.length === 0 && pii.value) {
+                let runText = '';
+                const itemPos = [];
+                pageItems.forEach((item) => {
+                  itemPos.push({ item, start: runText.length });
+                  runText += item.str + ' ';
+                });
+                const vIdx = runText.indexOf(pii.value);
+                if (vIdx !== -1) {
+                  const vEnd = vIdx + pii.value.length;
+                  overlapping = itemPos
+                    .filter((ip) => ip.start < vEnd && ip.start + ip.item.str.length > vIdx)
+                    .map((ip) => ip.item);
                 }
               }
-              continue;
+
+              if (overlapping.length === 0) continue;
+
+              // Black redaction boxes (burnt into the image)
+              for (const item of overlapping) {
+                redactedIndices.add(pageItems.indexOf(item));
+                const pad = 2;
+                const x = item.pdfX * renderScale - pad;
+                const y = viewport.height - item.pdfY * renderScale - item.height * renderScale - pad;
+                const w = item.width * renderScale + pad * 2;
+                const h = item.height * renderScale + pad * 2;
+                ctx.fillStyle = '#111111';
+                ctx.fillRect(x, y, w, h);
+              }
+
+              // Replacement label (white on black, burnt into image)
+              const first = overlapping[0];
+              const firstIdx = pageItems.indexOf(first);
+              const label = pii.suggested || '[REDACTED]';
+              const labelPx = Math.min(first.fontSize * 0.7, 8) * renderScale;
+              ctx.font = `600 ${labelPx}px "Segoe UI", Helvetica, Arial, sans-serif`;
+              ctx.fillStyle = '#ffffff';
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(label, first.pdfX * renderScale + 2, viewport.height - first.pdfY * renderScale - 1);
+
+              if (!replacementMap.has(firstIdx)) {
+                replacementMap.set(firstIdx, label);
+              }
             }
 
-            // Non-redacted text — preserve at original position
-            const safeStr = sanitizeForPDF(item.str);
-            if (safeStr && safeStr.trim()) {
-              try {
-                newPage.drawText(safeStr, {
-                  x: item.pdfX,
-                  y: item.pdfY,
-                  size: item.fontSize,
-                  font: textFont,
-                  color: rgb(0, 0, 0),
-                  opacity: 0.01,
-                });
-              } catch (_) { /* skip unencodable text */ }
+            // ── c) Embed rendered canvas as page-sized image ──────────────────
+            const imgBytes = await new Promise((resolve, reject) => {
+              canvas.toBlob(async (blob) => {
+                if (!blob) return reject(new Error('Canvas toBlob failed'));
+                resolve(new Uint8Array(await blob.arrayBuffer()));
+              }, 'image/jpeg', 0.95);
+            });
+            // Release canvas memory immediately (important for multi-page PDFs)
+            canvas.width = 0;
+            canvas.height = 0;
+            const jpg = await newPdf.embedJpg(imgBytes);
+
+            const newPage = newPdf.addPage([origVP.width, origVP.height]);
+            newPage.drawImage(jpg, { x: 0, y: 0, width: origVP.width, height: origVP.height });
+
+            // ── d) Invisible text layer for copy-paste ────────────────────────
+            for (let i = 0; i < pageItems.length; i++) {
+              const item = pageItems[i];
+
+              if (redactedIndices.has(i)) {
+                if (replacementMap.has(i)) {
+                  const safeLabel = sanitizeForPDF(replacementMap.get(i));
+                  if (safeLabel) {
+                    try {
+                      newPage.drawText(safeLabel, {
+                        x: item.pdfX,
+                        y: item.pdfY,
+                        size: Math.max(Math.min(item.fontSize * 0.75, 10), 4),
+                        font: textFont,
+                        color: rgb(0, 0, 0),
+                        opacity: 0.01,
+                      });
+                    } catch (_) { /* skip unencodable text */ }
+                  }
+                }
+                continue;
+              }
+
+              const safeStr = sanitizeForPDF(item.str);
+              if (safeStr && safeStr.trim()) {
+                try {
+                  newPage.drawText(safeStr, {
+                    x: item.pdfX,
+                    y: item.pdfY,
+                    size: item.fontSize,
+                    font: textFont,
+                    color: rgb(0, 0, 0),
+                    opacity: 0.01,
+                  });
+                } catch (_) { /* skip unencodable text */ }
+              }
             }
+          } finally {
+            if (page && page.cleanup) page.cleanup();
           }
         }
 
@@ -533,6 +546,10 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], _isP
         return { success: true, preservedFormat: true };
       } catch (pdfError) {
         console.error('PDF export failed, falling back to text PDF:', pdfError);
+      } finally {
+        if (pdfSrc && pdfSrc.destroy) {
+          pdfSrc.destroy();
+        }
       }
     }
 

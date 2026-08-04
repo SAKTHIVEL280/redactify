@@ -5,15 +5,26 @@ import mammoth from 'mammoth';
 import { highlightPII } from '../utils/piiDetector';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set up PDF.js worker — use same CDN as piiDetector.js for consistency
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+// Set up PDF.js worker using local Vite URL import
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, selectedPIIId, onSelectPII }) {
   const [docxHtml, setDocxHtml] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pdfPages, setPdfPages] = useState([]); // Array of { canvas, textItems, viewport }
+  const [pdfPages, setPdfPages] = useState([]); // Array of { dataUrl, textItems, viewport }
   const contentRef = useRef(null);
   const pdfContainerRef = useRef(null);
+
+  // Clean up Blob URLs on unmount or when pdfPages updates
+  useEffect(() => {
+    return () => {
+      pdfPages.forEach((p) => {
+        if (p.dataUrl && p.dataUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(p.dataUrl);
+        }
+      });
+    };
+  }, [pdfPages]);
 
   // Scroll to selected PII element when selectedPIIId changes (from sidebar click)
   useEffect(() => {
@@ -64,47 +75,77 @@ function DocumentViewer({ file, fileType, text, detectedPII, onTogglePII, select
 
   const renderPDF = useCallback(async () => {
     setLoading(true);
+    let pdf = null;
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const pages = [];
       const scale = 1.5; // Render at 1.5x for crisp text
 
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale });
+        try {
+          const viewport = page.getViewport({ scale });
 
-        // Render page to canvas
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
+          // Render page to canvas
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
 
-        await page.render({ canvasContext: ctx, viewport }).promise;
+          await page.render({ canvasContext: ctx, viewport }).promise;
 
-        // Get text content with positions
-        const textContent = await page.getTextContent();
+          // Convert canvas to Blob URL to prevent data URL memory leaks
+          const dataUrl = await new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+              if (blob) {
+                resolve(URL.createObjectURL(blob));
+              } else {
+                resolve(canvas.toDataURL());
+              }
+            }, 'image/png');
+          });
 
-        pages.push({
-          dataUrl: canvas.toDataURL(),
-          width: viewport.width,
-          height: viewport.height,
-          textItems: textContent.items.map(item => ({
-            str: item.str,
-            // Transform position from PDF space to canvas space
-            x: item.transform[4] * scale,
-            y: viewport.height - (item.transform[5] * scale) - (item.height * scale || 12 * scale),
-            width: item.width * scale,
-            height: (item.height || 12) * scale,
-          }))
-        });
+          // Clear canvas bounds to free GPU memory
+          canvas.width = 0;
+          canvas.height = 0;
+
+          // Get text content with positions
+          const textContent = await page.getTextContent();
+
+          pages.push({
+            dataUrl,
+            width: viewport.width,
+            height: viewport.height,
+            textItems: textContent.items.map(item => ({
+              str: item.str,
+              // Transform position from PDF space to canvas space
+              x: item.transform[4] * scale,
+              y: viewport.height - (item.transform[5] * scale) - (item.height * scale || 12 * scale),
+              width: item.width * scale,
+              height: (item.height || 12) * scale,
+            }))
+          });
+        } finally {
+          if (page && page.cleanup) page.cleanup();
+        }
       }
 
-      setPdfPages(pages);
+      setPdfPages((prev) => {
+        prev.forEach((p) => {
+          if (p.dataUrl && p.dataUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(p.dataUrl);
+          }
+        });
+        return pages;
+      });
     } catch (error) {
       console.error('PDF render error:', error);
       setPdfPages([]);
     } finally {
+      if (pdf && pdf.destroy) {
+        pdf.destroy();
+      }
       setLoading(false);
     }
   }, [file]);

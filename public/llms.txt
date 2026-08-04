@@ -1,0 +1,15 @@
+# Redactify (https://redactify.daeq.in)
+> Privacy-First AI Document & Resume Redaction Tool
+
+## Core Capabilities
+- 100% Client-Side Processing: Zero server uploads, zero API telemetry.
+- AI-Powered PII Detection: Local BERT Named Entity Recognition for Names, Organizations, Locations.
+- Multi-Format Support: PDF, DOCX (Microsoft Word), TXT.
+- Format Preservation: Retains document tables, fonts, headings, and visual layout.
+- Copyable PDF Layer: Exported PDFs maintain a copyable, non-PII text layer.
+- Global PII Support: US SSN, UK NINO, EU IBAN, Canadian SIN, Australian TFN, Indian Aadhaar/PAN/UPI, and International Phone Numbers.
+
+## Target Audience
+- Job Seekers anonymizing resumes before recruiter submission.
+- Legal & Compliance teams redacting confidential contracts under GDPR / CCPA.
+- Healthcare & Enterprise staff anonymizing internal documents.

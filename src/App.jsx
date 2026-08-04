@@ -17,6 +17,7 @@ import MobileMenu from './components/MobileMenu';
 import ErrorBoundary from './components/ErrorBoundary';
 import BrowserCompatWarning from './components/BrowserCompatWarning';
 import { verifyProStatus } from './utils/proLicenseDB';
+import { showSuccess } from './utils/toast';
 
 function App() {
   const scrollContainerRef = useRef(null);
@@ -45,38 +46,38 @@ function App() {
   const [selectedPIIId, setSelectedPIIId] = useState(null);
   const prevPIICountRef = useRef(0);
 
-  // Scroll detection for navbar
+  // Scroll detection for navbar with requestAnimationFrame throttling
   useEffect(() => {
     if (currentView !== 'landing') {
       setScrolled(false);
       return;
     }
 
-    const handleScroll = () => {
-      if (scrollContainerRef.current) {
-        const scrollTop = scrollContainerRef.current.scrollTop;
-        setScrolled(scrollTop > 100);
-      }
-    };
+    let ticking = false;
 
-    // Also try listening to window scroll as fallback
-    const handleWindowScroll = () => {
-      setScrolled(window.scrollY > 100);
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const containerScroll = scrollContainerRef.current ? scrollContainerRef.current.scrollTop : 0;
+          const winScroll = window.scrollY || 0;
+          setScrolled(containerScroll > 100 || winScroll > 100);
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
 
     const container = scrollContainerRef.current;
     if (container) {
-      container.addEventListener('scroll', handleScroll);
+      container.addEventListener('scroll', onScroll, { passive: true });
     }
-
-    // Add window listener as well to test
-    window.addEventListener('scroll', handleWindowScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
 
     return () => {
       if (container) {
-        container.removeEventListener('scroll', handleScroll);
+        container.removeEventListener('scroll', onScroll);
       }
-      window.removeEventListener('scroll', handleWindowScroll);
+      window.removeEventListener('scroll', onScroll);
     };
   }, [currentView]);
 
@@ -198,7 +199,7 @@ function App() {
   const handleProSuccess = (licenseData) => {
     setIsPro(true);
     setShowProModal(false);
-    alert('Pro upgrade successful! All features unlocked.');
+    showSuccess('Pro upgrade successful! All features unlocked.');
   };
 
   return (

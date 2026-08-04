@@ -1,29 +1,7 @@
 import { Resend } from 'resend';
+import { createRateLimiter, getClientIp, applyRateLimit } from './lib/rateLimit.js';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// Simple in-memory rate limiting (use Redis in production)
-const rateLimitMap = new Map();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 5;
-
-function checkRateLimit(identifier) {
-  const now = Date.now();
-  const userRequests = rateLimitMap.get(identifier) || [];
-
-  // Remove expired entries
-  const validRequests = userRequests.filter(time => now - time < RATE_LIMIT_WINDOW);
-
-  if (validRequests.length >= MAX_REQUESTS_PER_WINDOW) {
-    const resetTime = validRequests[0] + RATE_LIMIT_WINDOW;
-    return { allowed: false, remaining: 0, resetTime };
-  }
-
-  validRequests.push(now);
-  rateLimitMap.set(identifier, validRequests);
-  const resetTime = validRequests[0] + RATE_LIMIT_WINDOW;
-  return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - validRequests.length, resetTime };
-}
+const checkRateLimit = createRateLimiter(60 * 1000, 5); // 5 req/min/IP
 
 // Input sanitization
 function sanitizeInput(input) {
@@ -38,15 +16,18 @@ function isValidEmail(email) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
   const origin = req.headers.origin;
-  if (origin && !allowedOrigins.includes(origin)) {
-    return res.status(403).json({ error: 'Origin not allowed' });
-  }
-  if (origin && allowedOrigins.includes(origin)) {
+  const isVercelPreview = origin && /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin);
+  const isAllowed = !origin || allowedOrigins.includes(origin) || isVercelPreview || process.env.NODE_ENV !== 'production';
+
+  if (origin) {
+    if (!isAllowed) {
+      return res.status(403).json({ error: 'Origin not allowed' });
+    }
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   }
@@ -63,21 +44,7 @@ export default async function handler(req, res) {
   }
 
   // Rate limiting by IP
-  const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
-  const rateLimit = checkRateLimit(clientIp);
-  res.setHeader('X-RateLimit-Limit', MAX_REQUESTS_PER_WINDOW);
-  res.setHeader('X-RateLimit-Remaining', rateLimit.remaining);
-
-  if (!rateLimit.allowed) {
-    const resetIn = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
-    res.setHeader('X-RateLimit-Reset', rateLimit.resetTime);
-    res.setHeader('Retry-After', resetIn);
-    return res.status(429).json({
-      error: 'Too many requests',
-      message: `Please try again in ${resetIn} seconds`,
-      retryAfter: resetIn
-    });
-  }
+  if (applyRateLimit(req, res, checkRateLimit, 5)) return;
 
   try {
     const feedbackTo = process.env.FEEDBACK_TO_EMAIL;
@@ -86,10 +53,14 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Feedback destination not configured' });
     }
 
-    const { type, email, subject, message, attachmentType } = req.body;
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
+    const { type, email, subject, message, attachmentType } = req.body || {};
 
     // Validation
-    if (!message || !message.trim()) {
+    if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
@@ -132,6 +103,9 @@ Sent from Redactify Feedback System
 Timestamp: ${new Date().toISOString()}
     `.trim();
 
+    // Lazy Resend initialization
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
     // Send email using Resend
     const data = await resend.emails.send({
       from: `Redactify <${senderEmail}>`,
@@ -151,7 +125,8 @@ Timestamp: ${new Date().toISOString()}
     console.error('Feedback submission error:', error);
     return res.status(500).json({ 
       error: 'Failed to send feedback',
-      message: error.message 
+      message: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message
     });
   }
 }
+

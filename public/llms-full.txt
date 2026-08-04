@@ -1,0 +1,29 @@
+# Redactify — Full System Specification & Capabilities
+Website: https://redactify.daeq.in
+
+## Overview
+Redactify is an AI-powered document redaction application designed for 100% in-browser processing. No files, text, or metadata are ever transmitted to any remote server during document analysis or export.
+
+## Privacy Architecture
+- Local Execution: Web Workers handle regex scanning and ONNX runtime machine learning models in browser isolation.
+- Zero Data Retention: Documents exist only in volatile memory during the active session.
+- Offline Capability: Operates as a Progressive Web App (PWA) without an internet connection once loaded.
+
+## PII Detection Capabilities
+1. Names, Organizations, Locations (via BERT NER ONNX model).
+2. Email Addresses & Web URLs.
+3. Phone Numbers (US, UK, EU, International, Indian formats).
+4. Identification Numbers: US SSN, UK NINO, Canadian SIN, Australian TFN, Indian Aadhaar & PAN.
+5. Banking & Financial: Credit Cards, IBAN, Bank Accounts, UPI Virtual Payment Addresses.
+6. Compensation & Salaries: Currency figures in USD ($), EUR (€), GBP (£), INR (₹), AUD (A$), CAD (C$).
+
+## Export Options
+- PDF: Pixel-perfect page rendering with burnt-in black redaction boxes and an invisible, copyable non-PII text layer.
+- DOCX: OOXML format-preserving in-place XML replacement of PII strings.
+- TXT: Plain text sanitized output.
+
+## Regulatory Compliance
+Designed to fulfill strict compliance guidelines under:
+- General Data Protection Regulation (GDPR) Article 32 & 25 (Privacy by Design).
+- California Consumer Privacy Act (CCPA).
+- Health Insurance Portability and Accountability Act (HIPAA) Privacy Rule.

@@ -166,52 +166,61 @@ function readTextFile(file) {
 }
 
 async function extractTextFromPDF(file) {
+  let pdf = null;
   try {
     const arrayBuffer = await file.arrayBuffer();
     const pdfjsLib = await import('pdfjs-dist');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let fullText = '';
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
+      try {
+        const textContent = await page.getTextContent();
 
-      // Sort items top-to-bottom, left-to-right for logical reading order
-      textContent.items.sort((a, b) => {
-        const aY = a.transform[5];
-        const bY = b.transform[5];
-        const aX = a.transform[4];
-        const bX = b.transform[4];
-        if (Math.abs(bY - aY) <= 5) return aX - bX;
-        return bY - aY;
-      });
+        // Sort items top-to-bottom, left-to-right for logical reading order
+        textContent.items.sort((a, b) => {
+          const aY = a.transform[5];
+          const bY = b.transform[5];
+          const aX = a.transform[4];
+          const bX = b.transform[4];
+          if (Math.abs(bY - aY) <= 5) return aX - bX;
+          return bY - aY;
+        });
 
-      let lastY = null;
-      let pageText = '';
+        let lastY = null;
+        let pageText = '';
 
-      textContent.items.forEach((item, index) => {
-        const currentY = item.transform[5];
-        if (lastY !== null && Math.abs(currentY - lastY) > 5) {
-          pageText += '\n';
-        }
-        pageText += item.str;
-        if (index < textContent.items.length - 1) {
-          const nextY = textContent.items[index + 1].transform[5];
-          if (Math.abs(currentY - nextY) <= 5) {
-            pageText += ' ';
+        textContent.items.forEach((item, index) => {
+          const currentY = item.transform[5];
+          if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+            pageText += '\n';
           }
-        }
-        lastY = currentY;
-      });
+          pageText += item.str;
+          if (index < textContent.items.length - 1) {
+            const nextY = textContent.items[index + 1].transform[5];
+            if (Math.abs(currentY - nextY) <= 5) {
+              pageText += ' ';
+            }
+          }
+          lastY = currentY;
+        });
 
-      fullText += pageText + '\n\n';
+        fullText += pageText + '\n\n';
+      } finally {
+        if (page && page.cleanup) page.cleanup();
+      }
     }
 
     return fullText.trim();
   } catch (error) {
     throw new Error('Failed to extract text from PDF: ' + error.message);
+  } finally {
+    if (pdf && pdf.destroy) {
+      pdf.destroy();
+    }
   }
 }
 
@@ -324,9 +333,14 @@ function detectHeaderNames(text) {
   const detections = [];
   const firstChunk = text.substring(0, 500);
   const lines = firstChunk.split('\n');
+  let currentOffset = 0;
 
   for (let i = 0; i < Math.min(5, lines.length); i++) {
-    const line = lines[i].trim();
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+    const lineStart = currentOffset + (rawLine.length - rawLine.trimStart().length);
+    currentOffset += rawLine.length + 1;
+
     if (!line || line.length < 2 || line.length > 50) continue;
 
     // Skip lines with contact-info markers
@@ -348,17 +362,14 @@ function detectHeaderNames(text) {
       words.every((w) => /^[A-Z]{2,}$/.test(w)) && line.length <= 40;
 
     if (isTitleCase || isAllCaps) {
-      const start = text.indexOf(line);
-      if (start >= 0 && start < 500) {
-        detections.push({
-          type: PII_TYPES.NAME,
-          value: line,
-          start,
-          end: start + line.length,
-          confidence: 0.75
-        });
-        break; // Only detect one header name
-      }
+      detections.push({
+        type: PII_TYPES.NAME,
+        value: line,
+        start: lineStart,
+        end: lineStart + line.length,
+        confidence: 0.75
+      });
+      break; // Only detect one header name
     }
   }
 

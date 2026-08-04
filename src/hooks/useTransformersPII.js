@@ -52,6 +52,10 @@ export function useTransformersPII() {
             setError(workerError || 'Failed to load model');
             setIsModelLoaded(false);
             setIsModelLoading(false);
+            pendingCallbacksRef.current.forEach((callback) => {
+              callback.reject(new Error(workerError || 'Failed to load model'));
+            });
+            pendingCallbacksRef.current.clear();
             break;
 
           case 'DETECTION_COMPLETE':
@@ -77,7 +81,12 @@ export function useTransformersPII() {
 
       workerRef.current.addEventListener('error', (error) => {
         console.error('Transformers.js Worker error:', error);
-        setError('Worker crashed: ' + error.message);
+        const errMsg = error?.message || 'Worker runtime error';
+        setError('Worker crashed: ' + errMsg);
+        pendingCallbacksRef.current.forEach((cb) => {
+          cb.reject(new Error('Worker crashed: ' + errMsg));
+        });
+        pendingCallbacksRef.current.clear();
         workerRef.current = null;
       });
 

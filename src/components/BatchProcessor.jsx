@@ -2,18 +2,35 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { X, Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2, Eye, EyeOff, ChevronRight } from 'lucide-react';
 import { extractTextFromInput, replacePII, highlightPII, PII_COLORS } from '../utils/piiDetector';
 import { detectSmartPII, mergeDetections } from '../utils/smartDetection';
+import { useTransformersPII } from '../hooks/useTransformersPII';
 import { getEnabledCustomRules, applyCustomRules } from '../utils/customRulesDB';
 import { exportBatchAsZip } from '../utils/batchExportUtils';
 import { isValidFileType, formatFileSize } from '../utils/fileHelpers';
 import { getFileSizeLimits } from '../utils/browserCompat';
 
 export default function BatchProcessor({ isOpen, onClose }) {
+  const modalRef = React.useRef(null);
+  const { detectPII: detectWithML, isModelLoaded } = useTransformersPII();
   const [files, setFiles] = useState([]);
   const [processing, setProcessing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [reviewingFile, setReviewingFile] = useState(null); // File being reviewed
   const [showClearConfirm, setShowClearConfirm] = useState(false); // Confirmation modal
+
+  // ESC key handler for main modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && !reviewingFile && !showClearConfirm && !processing) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose, reviewingFile, showClearConfirm, processing]);
 
   const handleFileSelect = useCallback((e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -97,8 +114,9 @@ export default function BatchProcessor({ isOpen, onClose }) {
         // Extract text from file
         const text = await extractTextFromInput(file.file);
         
-        // Detect PII with smart detection (regex + context filtering, no ML in batch mode)
-        const smartDetections = await detectSmartPII(text, null);
+        // Detect PII with smart detection (ML if loaded + regex + context filtering)
+        const mlFn = isModelLoaded && detectWithML ? detectWithML : null;
+        const smartDetections = await detectSmartPII(text, mlFn);
 
         // Apply custom rules using the shared utility (consistent type + ReDoS protection)
         const customDetections = customRules && customRules.length > 0 
@@ -235,12 +253,18 @@ export default function BatchProcessor({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-white/10 my-auto">
+      <div 
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="batch-title"
+        className="bg-zinc-900 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-white/10 my-auto"
+      >
         
         {/* Header */}
         <div className="p-6 border-b border-white/10 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-1">Batch Processing</h2>
+            <h2 id="batch-title" className="text-2xl font-bold text-white mb-1">Batch Processing</h2>
             <p className="text-sm text-zinc-400">Process multiple documents at once</p>
           </div>
           <button

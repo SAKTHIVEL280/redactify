@@ -14,11 +14,11 @@ const PII_TYPES = {
 };
 
 const PII_REPLACEMENTS = {
-  [PII_TYPES.EMAIL]: '[email redacted]',
-  [PII_TYPES.PHONE]: '[phone redacted]',
-  [PII_TYPES.URL]: '[URL redacted]',
-  [PII_TYPES.NAME]: 'Candidate A',
-  [PII_TYPES.ADDRESS]: '[address redacted]'
+  [PII_TYPES.EMAIL]: '[EMAIL REDACTED]',
+  [PII_TYPES.PHONE]: '[PHONE REDACTED]',
+  [PII_TYPES.URL]: '[URL REDACTED]',
+  [PII_TYPES.NAME]: '[NAME REDACTED]',
+  [PII_TYPES.ADDRESS]: '[ADDRESS REDACTED]'
 };
 
 const PATTERNS = {
@@ -43,30 +43,30 @@ const COMMON_LAST_NAMES = [
   'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores'
 ];
 
+const COMBINED_NAME_REGEX = new RegExp(`\\b(?:${COMMON_FIRST_NAMES.join('|')})\\s+(?:${COMMON_LAST_NAMES.join('|')})\\b`, 'gi');
+
 function detectNames(text) {
   const detections = [];
   
-  // Pattern 1: Common first name + last name combinations
-  COMMON_FIRST_NAMES.forEach(firstName => {
-    COMMON_LAST_NAMES.forEach(lastName => {
-      const regex = new RegExp(`\\b${firstName}\\s+${lastName}\\b`, 'gi');
-      let match;
-      
-      while ((match = regex.exec(text)) !== null) {
-        detections.push({
-          type: PII_TYPES.NAME,
-          value: match[0],
-          start: match.index,
-          end: match.index + match[0].length,
-          confidence: 0.95
-        });
-      }
+  // Single-pass combined regex search for name combinations
+  COMBINED_NAME_REGEX.lastIndex = 0;
+  const startTime = Date.now();
+  let match;
+  
+  while ((match = COMBINED_NAME_REGEX.exec(text)) !== null) {
+    if (Date.now() - startTime > 1000) break; // Timeout safeguard
+    detections.push({
+      type: PII_TYPES.NAME,
+      value: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+      confidence: 0.95
     });
-  });
+    if (match.index === COMBINED_NAME_REGEX.lastIndex) COMBINED_NAME_REGEX.lastIndex++;
+  }
   
   // Pattern 2: Capitalized header names
   const headerPattern = /(?:^|\n)([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})(?:\n|$)/g;
-  let match;
   
   while ((match = headerPattern.exec(text)) !== null) {
     const nameMatch = match[1];
