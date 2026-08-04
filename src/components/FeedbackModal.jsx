@@ -97,20 +97,20 @@ export default function FeedbackModal({ isOpen, onClose }) {
         }, 3000);
       } else {
         // Try to parse error response, but handle cases where it's not JSON
-        let errorMessage = 'Failed to send feedback';
+        let errorMessage = '';
         try {
           const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
+          errorMessage = errorData.message || errorData.error || '';
         } catch (e) {
-          // Response wasn't JSON, use status text
-          errorMessage = response.statusText || errorMessage;
+          errorMessage = response.statusText || '';
         }
-        throw new Error(errorMessage);
+        throw new Error(errorMessage || 'Server returned an error');
       }
     } catch (error) {
+      const detail = error.message;
       setStatus({ 
         type: 'error', 
-        message: `Failed to send feedback: ${error.message}. Please try again or email us directly at support@redactify.com` 
+        message: detail ? `${detail}. Please try again or email us directly at support@redactify.com` : 'Failed to send feedback. Please try again or email us directly at support@redactify.com' 
       });
     } finally {
       setIsSubmitting(false);

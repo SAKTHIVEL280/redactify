@@ -47,14 +47,14 @@ export default async function handler(req, res) {
   if (applyRateLimit(req, res, checkRateLimit, 5)) return;
 
   try {
-    const feedbackTo = process.env.FEEDBACK_TO_EMAIL;
+    const feedbackTo = process.env.FEEDBACK_TO_EMAIL || 'sakthivel.hsr06@gmail.com';
     const senderEmail = process.env.FEEDBACK_FROM_EMAIL || 'onboarding@resend.dev';
-    if (!feedbackTo) {
-      return res.status(500).json({ error: 'Feedback destination not configured' });
-    }
 
     if (!process.env.RESEND_API_KEY) {
-      return res.status(500).json({ error: 'Email service not configured' });
+      return res.status(500).json({ 
+        error: 'Email service not configured',
+        message: 'RESEND_API_KEY environment variable is missing on server.' 
+      });
     }
 
     const { type, email, subject, message, attachmentType } = req.body || {};
@@ -125,7 +125,7 @@ Timestamp: ${new Date().toISOString()}
     console.error('Feedback submission error:', error);
     return res.status(500).json({ 
       error: 'Failed to send feedback',
-      message: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message
+      message: error.message || 'Internal server error'
     });
   }
 }
