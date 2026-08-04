@@ -17,11 +17,17 @@ import MobileMenu from './components/MobileMenu';
 import ErrorBoundary from './components/ErrorBoundary';
 import BrowserCompatWarning from './components/BrowserCompatWarning';
 import { verifyProStatus } from './utils/proLicenseDB';
-import { showSuccess } from './utils/toast';
+import SeoLandingPage, { SEO_PAGES_DATA } from './components/SeoLandingPages';
 
 function App() {
   const scrollContainerRef = useRef(null);
-  const [currentView, setCurrentView] = useState('landing'); // 'landing' or 'redactor'
+  const [currentView, setCurrentView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname.replace(/^\//, '');
+      if (SEO_PAGES_DATA[path]) return path;
+    }
+    return 'landing';
+  });
   const [darkMode, setDarkMode] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
@@ -339,7 +345,15 @@ function App() {
         }`} 
         data-scroll-container
       >
-        {currentView === 'landing' ? (
+        {SEO_PAGES_DATA[currentView] ? (
+          <SeoLandingPage
+            pageKey={currentView}
+            onGetStarted={handleGetStarted}
+            onNavigate={(action) => {
+              if (action === 'privacy') setShowPrivacy(true);
+            }}
+          />
+        ) : currentView === 'landing' ? (
           <Landing 
             onGetStarted={handleGetStarted} 
             isPro={isPro} 

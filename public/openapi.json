@@ -1,0 +1,26 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Redactify AI Redactor API",
+    "description": "Offline & Online AI document redaction engine specifications and entity definitions.",
+    "version": "v1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://redactify.daeq.in"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "getRedactifyInfo",
+        "summary": "Get Redactify AI Redactor information and core capabilities",
+        "responses": {
+          "200": {
+            "description": "Redactify capabilities and offline PII redaction specification."
+          }
+        }
+      }
+    }
+  }
+}

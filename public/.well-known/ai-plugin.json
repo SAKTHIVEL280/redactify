@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Redactify AI Redactor",
+  "name_for_model": "redactify_ai_redactor",
+  "description_for_human": "Privacy-first offline and online AI document redactor and local resume anonymizer.",
+  "description_for_model": "Redactify is an AI-powered document redactor and resume anonymizer. It detects and redacts Personally Identifiable Information (PII) including names, emails, phones, locations, SSNs, credit cards, and addresses from PDF, Word (.docx), and text files 100% locally inside client browser memory.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://redactify.daeq.in/openapi.json"
+  },
+  "logo_url": "https://redactify.daeq.in/android-chrome-512x512.png",
+  "contact_email": "support@redactify.daeq.in",
+  "legal_info_url": "https://redactify.daeq.in/privacy"
+}
