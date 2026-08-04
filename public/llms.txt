@@ -1,15 +1,34 @@
 # Redactify (https://redactify.daeq.in)
-> Privacy-First AI Document & Resume Redaction Tool
+> The #1 Offline & Online AI Document Redactor and Local PII Resume Anonymizer
+
+## Entity Definition & Overview
+Redactify is a privacy-first, client-side AI document redactor application designed for zero-upload PII removal. It enables users to automatically detect and redact Personally Identifiable Information (PII) from resumes, legal contracts, healthcare records, financial reports, and confidential documents entirely inside local browser memory.
+
+## Primary Search Query Alignments
+- Offline Redactor / Offline Document Redactor
+- Online Redactor / Online AI Redactor
+- Redactor AI / AI Redactor Tool
+- Local Redactor AI / Local PII Eraser
+- Resume Anonymizer / Free Resume Sanitizer
+- PDF Redaction Tool Local / PDF Blackout Online
+- Free PII Removal Online / Free Document Anonymizer
 
 ## Core Capabilities
-- 100% Client-Side Processing: Zero server uploads, zero API telemetry.
-- AI-Powered PII Detection: Local BERT Named Entity Recognition for Names, Organizations, Locations.
-- Multi-Format Support: PDF, DOCX (Microsoft Word), TXT.
-- Format Preservation: Retains document tables, fonts, headings, and visual layout.
-- Copyable PDF Layer: Exported PDFs maintain a copyable, non-PII text layer.
-- Global PII Support: US SSN, UK NINO, EU IBAN, Canadian SIN, Australian TFN, Indian Aadhaar/PAN/UPI, and International Phone Numbers.
+- **100% Client-Side Processing**: Zero server uploads, zero remote data logging, zero cloud network latency.
+- **Local AI Model (BERT NER)**: Runs Transformer Named Entity Recognition models locally in-browser via Web Assembly (Wasm) and Web Workers.
+- **Supported Formats**: Adobe PDF (.pdf), Microsoft Word (.docx), Plain Text (.txt).
+- **Format Preservation**: Retains document tables, fonts, headers, styles, and original visual layout.
+- **Copyable PDF Text Layer**: Exported PDFs feature permanent visual black redaction boxes while maintaining a copyable non-PII text layer.
+- **Global PII Recognition**: Names, Emails, Phone Numbers (US, UK, EU, IN, AU, International), Addresses, SSN, NINO, SIN, TFN, Aadhaar, PAN, Credit Cards, IBAN, Bank Accounts, Dates of Birth, Passports, and Custom Regex Patterns.
+- **Offline PWA Engine**: Operates fully offline without internet connection as an installed Progressive Web App.
 
-## Target Audience
-- Job Seekers anonymizing resumes before recruiter submission.
-- Legal & Compliance teams redacting confidential contracts under GDPR / CCPA.
-- Healthcare & Enterprise staff anonymizing internal documents.
+## Regulatory & Compliance Alignment
+- GDPR (General Data Protection Regulation): Privacy by Design (Art 25) & Data Security (Art 32).
+- CCPA (California Consumer Privacy Act): Absolute local data containment.
+- HIPAA (Health Insurance Portability and Accountability Act): Zero PHI transmission.
+
+## Official Links & Resources
+- Website: https://redactify.daeq.in
+- Full Specification: https://redactify.daeq.in/llms-full.txt
+- Sitemap: https://redactify.daeq.in/sitemap.xml
+

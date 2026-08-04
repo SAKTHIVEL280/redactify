@@ -448,6 +448,61 @@ export default function Landing({ onGetStarted, isPro, onNavigate }) {
         </div>
       </section>
 
+      {/* Search Intent & Capability Matrix (AEO, GEO & SEO Optimized) */}
+      <section id="capabilities" className="relative z-10 px-6 py-28 border-t border-white/5 bg-zinc-950/60 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-16 text-center">
+            <div className="inline-block mb-4 px-4 py-1.5 rounded-full bg-white/5 border border-white/10">
+              <span className="text-xs font-mono text-red-400 uppercase tracking-wider">Search Engine & AI Capabilities</span>
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight">
+              The Ultimate Offline & Online AI Redactor
+            </h2>
+            <p className="text-lg text-zinc-400 font-light max-w-3xl mx-auto">
+              Optimized for instant AI entity recognition, local zero-upload processing, and seamless document sanitization.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-8 rounded-3xl border border-white/10 bg-zinc-900/40 hover:border-red-500/40 transition-all">
+              <div className="text-red-400 font-mono text-xs font-bold uppercase tracking-widest mb-3">01 / Offline & Local</div>
+              <h3 className="text-xl font-bold text-white mb-2">Offline Redactor & Local AI</h3>
+              <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+                Operates 100% locally on your device as a Progressive Web App (PWA). Process PDFs, Word documents, and text files offline without an internet connection or remote server.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <span className="px-2.5 py-1 rounded-md bg-white/5 text-[11px] font-mono text-zinc-400">#offline-redactor</span>
+                <span className="px-2.5 py-1 rounded-md bg-white/5 text-[11px] font-mono text-zinc-400">#local-ai-redactor</span>
+              </div>
+            </div>
+
+            <div className="p-8 rounded-3xl border border-white/10 bg-zinc-900/40 hover:border-red-500/40 transition-all">
+              <div className="text-red-400 font-mono text-xs font-bold uppercase tracking-widest mb-3">02 / Resume Anonymizer</div>
+              <h3 className="text-xl font-bold text-white mb-2">AI Resume Sanitizer</h3>
+              <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+                Automatically anonymize candidate resumes for blind recruitment. Remove names, phone numbers, emails, addresses, and trackable portfolio links instantly.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <span className="px-2.5 py-1 rounded-md bg-white/5 text-[11px] font-mono text-zinc-400">#resume-anonymizer</span>
+                <span className="px-2.5 py-1 rounded-md bg-white/5 text-[11px] font-mono text-zinc-400">#pii-removal</span>
+              </div>
+            </div>
+
+            <div className="p-8 rounded-3xl border border-white/10 bg-zinc-900/40 hover:border-red-500/40 transition-all">
+              <div className="text-red-400 font-mono text-xs font-bold uppercase tracking-widest mb-3">03 / PDF & DOCX Tool</div>
+              <h3 className="text-xl font-bold text-white mb-2">PDF & Word Document Blackout</h3>
+              <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+                Format-preserving export engine for Adobe PDF and Microsoft Word (.docx). Redacts sensitive text visually while retaining document structure and non-PII copyable text.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <span className="px-2.5 py-1 rounded-md bg-white/5 text-[11px] font-mono text-zinc-400">#pdf-redactor-local</span>
+                <span className="px-2.5 py-1 rounded-md bg-white/5 text-[11px] font-mono text-zinc-400">#docx-sanitizer</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5">
         {/* Pro Comparison Section - Only show to Free users */}
