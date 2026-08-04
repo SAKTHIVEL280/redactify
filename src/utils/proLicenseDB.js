@@ -10,19 +10,19 @@ const LOCALSTORAGE_KEY = 'redactify_pro_license_encrypted';
 // Track if we're using fallback storage
 let useLocalStorageFallback = false;
 
-// Derive encryption key from a persistent vault salt
-// Prevents decryption failures when browser language, locale, or platform changes
+// Derive encryption key from a stable vault seed
+// Ensures consistent key derivation across browser sessions & cookie clears
 async function getEncryptionKey() {
-  let salt = null;
+  let salt = 'redactify-pro-vault-seed-v1';
   try {
-    salt = localStorage.getItem('redactify_vault_salt');
-    if (!salt) {
-      const randomBytes = crypto.getRandomValues(new Uint8Array(16));
-      salt = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    const storedSalt = localStorage.getItem('redactify_vault_salt');
+    if (storedSalt) {
+      salt = storedSalt;
+    } else {
       localStorage.setItem('redactify_vault_salt', salt);
     }
   } catch (e) {
-    salt = 'redactify-pro-fallback-vault-key';
+    // Ignore localStorage access errors (e.g. strict private mode)
   }
 
   const stableFingerprint = 'redactify-pro-v1-' + salt;
@@ -61,7 +61,7 @@ async function encryptData(data) {
     // Convert to base64 for storage (stack-safe for large buffers)
     return btoa(Array.from(combined, (b) => String.fromCharCode(b)).join(''));
   } catch (error) {
-    console.error('Encryption error:', error);
+    console.warn('Encryption warning:', error.message || error);
     throw error;
   }
 }
@@ -73,6 +73,10 @@ async function decryptData(encryptedBase64) {
     
     // Convert from base64
     const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+    if (combined.length < 13) {
+      throw new Error('Invalid encrypted payload length');
+    }
+    
     const iv = combined.slice(0, 12);
     const encryptedData = combined.slice(12);
     
@@ -85,8 +89,8 @@ async function decryptData(encryptedBase64) {
     const decoder = new TextDecoder();
     return JSON.parse(decoder.decode(decryptedBuffer));
   } catch (error) {
-    console.error('Decryption error:', error);
-    throw error;
+    // Re-throw clean Error message without verbose DOMException stack trace
+    throw new Error('License key decryption failed (key or payload mismatch)');
   }
 }
 
@@ -204,7 +208,8 @@ export const getProKey = async () => {
           return { isValid: true, data: decryptedData };
         }
       } catch (decryptError) {
-        console.error('Decryption failed:', decryptError);
+        console.warn('Decryption failed for stored license key. Cleaning up stale record:', decryptError.message || decryptError);
+        await deleteProKey();
       }
     }
     
