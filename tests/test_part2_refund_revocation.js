@@ -1,7 +1,7 @@
 import assert from 'assert';
 import crypto from 'crypto';
-import { signLicense } from '../api/lib/licenseSigner.js';
-import { isRevoked, recordRevocation } from '../api/lib/revocationRegistry.js';
+import { signLicense } from '../lib/licenseSigner.js';
+import { isRevoked, recordRevocation } from '../lib/revocationRegistry.js';
 import { verifyLicenseSignature } from '../src/utils/licenseCrypto.js';
 
 console.log('--- TEST PART 2: RAZORPAY REFUND & REVOCATION HANDLING ---\n');

@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { signLicense } from '../api/lib/licenseSigner.js';
+import { signLicense } from '../lib/licenseSigner.js';
 import { verifyLicenseSignature } from '../src/utils/licenseCrypto.js';
 
 console.log('--- TEST PART 4: LOGOUT & RECOVERY FLOW TEST ---\n');

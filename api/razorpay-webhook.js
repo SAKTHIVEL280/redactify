@@ -7,7 +7,7 @@
  */
 
 import crypto from 'crypto';
-import { recordRevocation } from './lib/revocationRegistry.js';
+import { recordRevocation } from '../lib/revocationRegistry.js';
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {

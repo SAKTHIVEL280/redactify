@@ -9,7 +9,7 @@
  * Heartbeat: Renews every 15 seconds during active document processing.
  */
 
-import { createRateLimiter, applyRateLimit } from './lib/rateLimit.js';
+import { createRateLimiter, applyRateLimit } from '../lib/rateLimit.js';
 
 const checkRateLimit = createRateLimiter(60 * 1000, 60); // 60 req/min/IP (covers heartbeats)
 

@@ -4,6 +4,18 @@
   "installCommand": "npm install",
   "rewrites": [
     {
+      "source": "/api/send-recovery-code",
+      "destination": "/api/recovery?action=send-code"
+    },
+    {
+      "source": "/api/verify-recovery-code",
+      "destination": "/api/recovery?action=verify-code"
+    },
+    {
+      "source": "/api/recover-by-payment",
+      "destination": "/api/recovery?action=by-payment"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

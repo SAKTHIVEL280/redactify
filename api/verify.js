@@ -6,8 +6,8 @@
  */
 
 import crypto from 'crypto';
-import { createRateLimiter, getClientIp, applyRateLimit } from './lib/rateLimit.js';
-import { signLicense } from './lib/licenseSigner.js';
+import { createRateLimiter, getClientIp, applyRateLimit } from '../lib/rateLimit.js';
+import { signLicense } from '../lib/licenseSigner.js';
 
 const checkRateLimit = createRateLimiter(60 * 1000, 5); // 5 req/min/IP
 

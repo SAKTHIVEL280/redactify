@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { signLicense, canonicalizeLicense, REDACTIFY_PUBLIC_KEY_PEM } from '../api/lib/licenseSigner.js';
+import { signLicense, canonicalizeLicense, REDACTIFY_PUBLIC_KEY_PEM } from '../lib/licenseSigner.js';
 import { verifyLicenseSignature } from '../src/utils/licenseCrypto.js';
 
 console.log('--- TEST PART 1: ASYMMETRIC LICENSE VERIFICATION PROOF ---\n');

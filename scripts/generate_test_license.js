@@ -1,4 +1,4 @@
-import { signLicense } from '../api/lib/licenseSigner.js';
+import { signLicense } from '../lib/licenseSigner.js';
 
 const legit = {
   key: 'RDCT-2026-VERIFIED-PURCHASER',

@@ -5,8 +5,8 @@
  * Query / Body: { key, paymentId }
  */
 
-import { isRevoked } from './lib/revocationRegistry.js';
-import { createRateLimiter, applyRateLimit } from './lib/rateLimit.js';
+import { isRevoked } from '../lib/revocationRegistry.js';
+import { createRateLimiter, applyRateLimit } from '../lib/rateLimit.js';
 
 const checkRateLimit = createRateLimiter(60 * 1000, 30); // 30 req/min/IP
 

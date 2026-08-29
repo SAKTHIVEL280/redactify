@@ -1,6 +1,6 @@
 import assert from 'assert';
 import crypto from 'crypto';
-import { signLicense, verifyLicense, canonicalizeLicense } from '../api/lib/licenseSigner.js';
+import { signLicense, verifyLicense, canonicalizeLicense } from '../lib/licenseSigner.js';
 import { detectPII, replacePII } from '../src/utils/piiDetector.js';
 import { exportAsDOCX, exportAsPDF } from '../src/utils/exportUtils.js';
 import { exportBatchAsZip } from '../src/utils/batchExportUtils.js';
