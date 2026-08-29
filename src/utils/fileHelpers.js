@@ -2,7 +2,7 @@
  * File helper utilities
  */
 
-import { getFileSizeLimits } from './browserCompat';
+import { getFileSizeLimits } from './browserCompat.js';
 
 /**
  * Validate file size against dynamic browser limits

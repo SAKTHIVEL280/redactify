@@ -30,7 +30,7 @@ export default function Privacy({ onClose }) {
                 </p>
               </div>
               <p className="text-zinc-400 leading-relaxed">
-                Resume Redactor operates on a "Local-First" architecture. This means the application code runs entirely within your web browser's memory. 
+                Redactify operates on a "Local-First" architecture. This means the application code runs entirely within your web browser's memory. 
                 Unlike traditional web services, there is no backend server processing your sensitive data.
               </p>
             </section>

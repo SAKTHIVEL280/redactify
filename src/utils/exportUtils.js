@@ -1,5 +1,6 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, BorderStyle } from 'docx';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { verifyProStatus } from './proLicenseDB.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -56,10 +57,16 @@ const SECTION_RE =
 
 // ─── TXT Export ──────────────────────────────────────────────────────────────────
 
+export const generateTXTBlob = (text, originalFilename = null) => {
+  const filename = makeFilename(originalFilename, 'txt');
+  const blob = new Blob([text], { type: 'text/plain' });
+  return { blob, filename };
+};
+
 export const exportAsTXT = (text, originalFilename = null) => {
   try {
-    const filename = makeFilename(originalFilename, 'txt');
-    downloadBlob(new Blob([text], { type: 'text/plain' }), filename);
+    const { blob, filename } = generateTXTBlob(text, originalFilename);
+    downloadBlob(blob, filename);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -190,82 +197,87 @@ function applyRedactionsToXML(xmlDoc, piiItems) {
 }
 
 /**
- * Export as DOCX — preserves ALL original formatting when the source is DOCX.
+ * Generate DOCX Blob — preserves ALL original formatting when the source is DOCX.
+ */
+export const generateDOCXBlob = async (text, originalFilename = null, originalFile = null, piiItems = []) => {
+  const filename = makeFilename(originalFilename, 'docx');
+
+  // ── Strategy 1: Format-preserving in-place edit ────────────────────────
+  if (
+    originalFile &&
+    originalFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+    piiItems.some((p) => p.redact)
+  ) {
+    try {
+      const JSZip = (await import('jszip')).default;
+      const arrayBuffer = await originalFile.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+
+      // Collect every XML part that can contain visible text
+      const xmlFiles = ['word/document.xml'];
+      Object.keys(zip.files).forEach((f) => {
+        if (/^word\/(header|footer|footnotes|endnotes)\d*\.xml$/.test(f)) xmlFiles.push(f);
+      });
+
+      let partsEdited = 0;
+      for (const xmlPath of xmlFiles) {
+        const xmlFile = zip.file(xmlPath);
+        if (!xmlFile) continue;
+
+        const xmlContent = await xmlFile.async('string');
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+
+        if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+          console.warn(`[DOCX export] XML parse error in ${xmlPath}, skipping`);
+          continue;
+        }
+
+        applyRedactionsToXML(xmlDoc, piiItems);
+
+        const serializer = new XMLSerializer();
+        zip.file(xmlPath, serializer.serializeToString(xmlDoc));
+        partsEdited++;
+      }
+
+      if (partsEdited > 0) {
+        const blob = await zip.generateAsync({
+          type: 'blob',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        });
+        return { blob, filename, preservedFormat: true };
+      }
+      console.warn('[DOCX export] No XML parts edited, falling back to text DOCX');
+    } catch (formatError) {
+      console.error('[DOCX export] Format-preserving export failed:', formatError);
+    }
+  }
+
+  // ── Strategy 2: Structured fallback from plain text ────────────────────
+  const paragraphs = buildFormattedParagraphs(text);
+  const doc = new Document({
+    sections: [{
+      properties: { page: { margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
+      children: paragraphs,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  return { blob, filename, preservedFormat: false };
+};
+
+/**
+ * Export as DOCX — triggers browser download.
  */
 export const exportAsDOCX = async (text, originalFilename = null, originalFile = null, piiItems = []) => {
   try {
-    const filename = makeFilename(originalFilename, 'docx');
-
-    // ── Strategy 1: Format-preserving in-place edit ────────────────────────
-    //    Opens the DOCX as a ZIP, finds all text-bearing XML parts (body,
-    //    headers, footers, footnotes, endnotes), and does value-based
-    //    search-replace inside <w:t> nodes. All fonts, styles, images,
-    //    tables, and layout are untouched — only PII values change.
-    if (
-      originalFile &&
-      originalFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
-      piiItems.some((p) => p.redact)
-    ) {
-      try {
-        const JSZip = (await import('jszip')).default;
-        const arrayBuffer = await originalFile.arrayBuffer();
-        const zip = await JSZip.loadAsync(arrayBuffer);
-
-        // Collect every XML part that can contain visible text
-        const xmlFiles = ['word/document.xml'];
-        Object.keys(zip.files).forEach((f) => {
-          if (/^word\/(header|footer|footnotes|endnotes)\d*\.xml$/.test(f)) xmlFiles.push(f);
-        });
-
-        let partsEdited = 0;
-        for (const xmlPath of xmlFiles) {
-          const xmlFile = zip.file(xmlPath);
-          if (!xmlFile) continue;
-
-          const xmlContent = await xmlFile.async('string');
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-
-          if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-            console.warn(`[DOCX export] XML parse error in ${xmlPath}, skipping`);
-            continue;
-          }
-
-          applyRedactionsToXML(xmlDoc, piiItems);
-
-          const serializer = new XMLSerializer();
-          zip.file(xmlPath, serializer.serializeToString(xmlDoc));
-          partsEdited++;
-        }
-
-        if (partsEdited > 0) {
-          const blob = await zip.generateAsync({
-            type: 'blob',
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          });
-          downloadBlob(blob, filename);
-          return { success: true, preservedFormat: true };
-        }
-        // If no parts were edited, fall through to Strategy 2
-        console.warn('[DOCX export] No XML parts edited, falling back to text DOCX');
-      } catch (formatError) {
-        console.error('[DOCX export] Format-preserving export failed:', formatError);
-        // Fall through to structured fallback
-      }
+    const isPro = await verifyProStatus();
+    if (!isPro) {
+      return { success: false, error: 'Pro license required for DOCX export. Cryptographic signature verification failed.' };
     }
-
-    // ── Strategy 2: Structured fallback from plain text ────────────────────
-    const paragraphs = buildFormattedParagraphs(text);
-    const doc = new Document({
-      sections: [{
-        properties: { page: { margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
-        children: paragraphs,
-      }],
-    });
-
-    const blob = await Packer.toBlob(doc);
-    downloadBlob(blob, filename);
-    return { success: true, preservedFormat: false };
+    const result = await generateDOCXBlob(text, originalFilename, originalFile, piiItems);
+    downloadBlob(result.blob, result.filename);
+    return { success: true, preservedFormat: result.preservedFormat };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -331,201 +343,277 @@ function buildFormattedParagraphs(text) {
 // ─── PDF Export ───────────────────────────────────────────────────────────────────
 
 /**
- * Export as PDF.
- *
- * Strategy 1 (PDF source): Renders each page to a high-quality image with black
- * redaction boxes burnt in, then embeds that image in a new PDF page. On top of
- * the image an INVISIBLE text layer is drawn so that:
- *   • Non-PII text can be selected & copied from any PDF viewer.
- *   • Redacted PII is replaced by the label (e.g. "[EMAIL REDACTED]") in the
- *     text layer — the original PII string is NEVER present in the output file.
- *   • Visual formatting is pixel-perfect (the image IS the original page).
- *
- * Strategy 2 (non-PDF source or fallback): Builds a new PDF from redacted text
- * with section-header detection, bullet formatting, and word-wrap.
+ * Accurately find character slice [subStart, subEnd] of PII inside a PDF text item.
  */
-export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], _isPro = false, originalFilename = null) => {
-  try {
-    const filename = makeFilename(originalFilename, 'pdf');
+function getPIISubSliceInItem(item, pii) {
+  if (!item || !item.str) return null;
+  const strLen = item.str.length;
 
-    // ── Strategy 1: Image layer + invisible copyable text layer ────────────
-    if (uploadedFile && uploadedFile.type === 'application/pdf' && piiItems.some((p) => p.redact)) {
-      let pdfSrc = null;
-      try {
-        const arrayBuffer = await uploadedFile.arrayBuffer();
-        const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+  // Method 1: Global offset overlap
+  if (typeof item.start === 'number' && typeof item.end === 'number') {
+    if (pii.start < item.end && pii.end > item.start) {
+      const subStart = Math.max(0, pii.start - item.start);
+      const subEnd = Math.min(strLen, pii.end - item.start);
+      if (subEnd > subStart) {
+        return { subStart, subEnd };
+      }
+    }
+  }
 
-        pdfSrc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
-        const newPdf = await PDFDocument.create();
-        const textFont = await newPdf.embedFont(StandardFonts.Helvetica);
+  // Method 2: Direct value search
+  if (pii.value && pii.value.length > 0) {
+    const idx = item.str.indexOf(pii.value);
+    if (idx !== -1) {
+      return { subStart: idx, subEnd: idx + pii.value.length };
+    }
 
-        // ── Build global text-position map (mirrors extractTextFromPDF) ─────
-        let globalOffset = 0;
-        const allPageItems = [];
+    // Method 3: Case-insensitive search
+    const lowerIdx = item.str.toLowerCase().indexOf(pii.value.toLowerCase());
+    if (lowerIdx !== -1) {
+      return { subStart: lowerIdx, subEnd: lowerIdx + pii.value.length };
+    }
 
-        for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
-          const page = await pdfSrc.getPage(pageNum);
-          try {
-            const tc = await page.getTextContent();
+    // Method 4: Partial overlap (PII spans multiple items)
+    for (let l = Math.min(strLen, pii.value.length); l >= 2; l--) {
+      const suffix = item.str.substring(strLen - l);
+      if (pii.value.startsWith(suffix)) {
+        return { subStart: strLen - l, subEnd: strLen };
+      }
+    }
+    for (let l = Math.min(strLen, pii.value.length); l >= 2; l--) {
+      const prefix = item.str.substring(0, l);
+      if (pii.value.endsWith(prefix)) {
+        return { subStart: 0, subEnd: l };
+      }
+    }
+  }
 
-            tc.items.sort((a, b) => {
-              const aY = a.transform[5], bY = b.transform[5];
-              const aX = a.transform[4], bX = b.transform[4];
-              if (Math.abs(bY - aY) <= 5) return aX - bX;
-              return bY - aY;
+  return { subStart: 0, subEnd: strLen };
+}
+
+/**
+ * Generate PDF Blob with precise character-level redactions.
+ */
+export const generatePDFBlob = async (text, uploadedFile = null, piiItems = [], _isPro = false, originalFilename = null) => {
+  const filename = makeFilename(originalFilename, 'pdf');
+
+  // ── Strategy 1: Image layer + invisible copyable text layer ────────────
+  if (uploadedFile && uploadedFile.type === 'application/pdf' && piiItems.some((p) => p.redact)) {
+    let pdfSrc = null;
+    try {
+      const arrayBuffer = await uploadedFile.arrayBuffer();
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
+      pdfSrc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+      const newPdf = await PDFDocument.create();
+      const textFont = await newPdf.embedFont(StandardFonts.Helvetica);
+
+      // ── Build global text-position map (mirrors extractTextFromPDF) ─────
+      let globalOffset = 0;
+      const allPageItems = [];
+
+      for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
+        const page = await pdfSrc.getPage(pageNum);
+        try {
+          const tc = await page.getTextContent();
+
+          tc.items.sort((a, b) => {
+            const aY = a.transform[5], bY = b.transform[5];
+            const aX = a.transform[4], bX = b.transform[4];
+            if (Math.abs(bY - aY) <= 5) return aX - bX;
+            return bY - aY;
+          });
+
+          const pageItems = [];
+          let lastY = null;
+
+          tc.items.forEach((item, index) => {
+            const curY = item.transform[5];
+            if (lastY !== null && Math.abs(curY - lastY) > 5) globalOffset += 1;
+
+            const fontSize = Math.abs(item.transform[0]) || 12;
+            pageItems.push({
+              str: item.str,
+              start: globalOffset,
+              end: globalOffset + item.str.length,
+              pdfX: item.transform[4],
+              pdfY: item.transform[5],
+              width: item.width || item.str.length * fontSize * 0.6,
+              height: item.height || fontSize * 1.2,
+              fontSize,
             });
 
-            const pageItems = [];
-            let lastY = null;
+            globalOffset += item.str.length;
 
-            tc.items.forEach((item, index) => {
-              const curY = item.transform[5];
-              if (lastY !== null && Math.abs(curY - lastY) > 5) globalOffset += 1;
+            if (index < tc.items.length - 1) {
+              const nextY = tc.items[index + 1].transform[5];
+              if (Math.abs(curY - nextY) <= 5) globalOffset += 1;
+            }
+            lastY = curY;
+          });
 
-              const fontSize = Math.abs(item.transform[0]) || 12;
-              pageItems.push({
-                str: item.str,
-                start: globalOffset,
-                end: globalOffset + item.str.length,
-                pdfX: item.transform[4],
-                pdfY: item.transform[5],
-                width: item.width || item.str.length * fontSize * 0.6,
-                height: item.height || fontSize * 1.2,
-                fontSize,
-              });
-
-              globalOffset += item.str.length;
-
-              if (index < tc.items.length - 1) {
-                const nextY = tc.items[index + 1].transform[5];
-                if (Math.abs(curY - nextY) <= 5) globalOffset += 1;
-              }
-              lastY = curY;
-            });
-
-            globalOffset += 2;
-            allPageItems.push(pageItems);
-          } finally {
-            if (page && page.cleanup) page.cleanup();
-          }
+          globalOffset += 2;
+          allPageItems.push(pageItems);
+        } finally {
+          if (page && page.cleanup) page.cleanup();
         }
+      }
 
-        // ── Render each page ────────────────────────────────────────────────
-        const renderScale = 2.5;
-        const piiToRedact = piiItems.filter((p) => p.redact);
+      // ── Render each page ────────────────────────────────────────────────
+      const renderScale = 2.5;
+      const piiToRedact = piiItems.filter((p) => p.redact);
 
-        for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
-          const page = await pdfSrc.getPage(pageNum);
-          try {
-            const viewport = page.getViewport({ scale: renderScale });
-            const origVP = page.getViewport({ scale: 1.0 });
+      for (let pageNum = 1; pageNum <= pdfSrc.numPages; pageNum++) {
+        const page = await pdfSrc.getPage(pageNum);
+        try {
+          const viewport = page.getViewport({ scale: renderScale });
+          const origVP = page.getViewport({ scale: 1.0 });
 
-            // ── a) Canvas render ──────────────────────────────────────────────
-            const canvas = document.createElement('canvas');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            const ctx = canvas.getContext('2d');
-            await page.render({ canvasContext: ctx, viewport }).promise;
+          // ── a) Canvas render ──────────────────────────────────────────────
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
 
-            const pageItems = allPageItems[pageNum - 1];
-            const redactedIndices = new Set();          // track which items are redacted
-            const replacementMap = new Map();           // itemIndex → replacement label
+          const pageItems = allPageItems[pageNum - 1];
+          const itemRedactions = new Map();
 
-            // ── b) Find PII & draw black boxes on canvas ──────────────────────
-            for (const pii of piiToRedact) {
-              let overlapping = pageItems.filter(
-                (item) => item.start < pii.end && item.end > pii.start,
-              );
+          // ── b) Find PII & draw precise black boxes on canvas ──────────────
+          for (const pii of piiToRedact) {
+            let overlapping = pageItems.filter(
+              (item) => item.start < pii.end && item.end > pii.start,
+            );
 
-              // Fallback: value-based matching
-              if (overlapping.length === 0 && pii.value) {
-                let runText = '';
-                const itemPos = [];
-                pageItems.forEach((item) => {
-                  itemPos.push({ item, start: runText.length });
-                  runText += item.str + ' ';
-                });
-                const vIdx = runText.indexOf(pii.value);
-                if (vIdx !== -1) {
-                  const vEnd = vIdx + pii.value.length;
-                  overlapping = itemPos
-                    .filter((ip) => ip.start < vEnd && ip.start + ip.item.str.length > vIdx)
-                    .map((ip) => ip.item);
-                }
-              }
-
-              if (overlapping.length === 0) continue;
-
-              // Black redaction boxes (burnt into the image)
-              for (const item of overlapping) {
-                redactedIndices.add(pageItems.indexOf(item));
-                const pad = 2;
-                const x = item.pdfX * renderScale - pad;
-                const y = viewport.height - item.pdfY * renderScale - item.height * renderScale - pad;
-                const w = item.width * renderScale + pad * 2;
-                const h = item.height * renderScale + pad * 2;
-                ctx.fillStyle = '#111111';
-                ctx.fillRect(x, y, w, h);
-              }
-
-              // Replacement label (white on black, burnt into image)
-              const first = overlapping[0];
-              const firstIdx = pageItems.indexOf(first);
-              const label = pii.suggested || '[REDACTED]';
-              const labelPx = Math.min(first.fontSize * 0.7, 8) * renderScale;
-              ctx.font = `600 ${labelPx}px "Segoe UI", Helvetica, Arial, sans-serif`;
-              ctx.fillStyle = '#ffffff';
-              ctx.textBaseline = 'bottom';
-              ctx.fillText(label, first.pdfX * renderScale + 2, viewport.height - first.pdfY * renderScale - 1);
-
-              if (!replacementMap.has(firstIdx)) {
-                replacementMap.set(firstIdx, label);
+            // Fallback: value-based matching
+            if (overlapping.length === 0 && pii.value) {
+              let runText = '';
+              const itemPos = [];
+              pageItems.forEach((item) => {
+                itemPos.push({ item, start: runText.length });
+                runText += item.str + ' ';
+              });
+              const vIdx = runText.indexOf(pii.value);
+              if (vIdx !== -1) {
+                const vEnd = vIdx + pii.value.length;
+                overlapping = itemPos
+                  .filter((ip) => ip.start < vEnd && ip.start + ip.item.str.length > vIdx)
+                  .map((ip) => ip.item);
               }
             }
 
-            // ── c) Embed rendered canvas as page-sized image ──────────────────
-            const imgBytes = await new Promise((resolve, reject) => {
-              canvas.toBlob(async (blob) => {
-                if (!blob) return reject(new Error('Canvas toBlob failed'));
-                resolve(new Uint8Array(await blob.arrayBuffer()));
-              }, 'image/jpeg', 0.95);
-            });
-            // Release canvas memory immediately (important for multi-page PDFs)
-            canvas.width = 0;
-            canvas.height = 0;
-            const jpg = await newPdf.embedJpg(imgBytes);
+            if (overlapping.length === 0) continue;
 
-            const newPage = newPdf.addPage([origVP.width, origVP.height]);
-            newPage.drawImage(jpg, { x: 0, y: 0, width: origVP.width, height: origVP.height });
+            for (const item of overlapping) {
+              const slice = getPIISubSliceInItem(item, pii);
+              if (!slice || slice.subEnd <= slice.subStart) continue;
 
-            // ── d) Invisible text layer for copy-paste ────────────────────────
-            for (let i = 0; i < pageItems.length; i++) {
-              const item = pageItems[i];
+              const { subStart, subEnd } = slice;
+              const itemIdx = pageItems.indexOf(item);
+              const strLen = Math.max(1, item.str.length);
+              const itemCanvasWidth = item.width * renderScale;
+              const itemCanvasX = item.pdfX * renderScale;
+              const itemCanvasY = viewport.height - (item.pdfY * renderScale) - (item.height * renderScale);
+              const itemCanvasH = item.height * renderScale;
 
-              if (redactedIndices.has(i)) {
-                if (replacementMap.has(i)) {
-                  const safeLabel = sanitizeForPDF(replacementMap.get(i));
-                  if (safeLabel) {
-                    try {
-                      newPage.drawText(safeLabel, {
-                        x: item.pdfX,
-                        y: item.pdfY,
-                        size: Math.max(Math.min(item.fontSize * 0.75, 10), 4),
-                        font: textFont,
-                        color: rgb(0, 0, 0),
-                        opacity: 0.01,
-                      });
-                    } catch (_) { /* skip unencodable text */ }
-                  }
-                }
-                continue;
+              // Measure sub-string coordinates
+              ctx.font = `${item.fontSize * renderScale}px sans-serif`;
+              const fullMeasured = ctx.measureText(item.str).width;
+              let matchX, matchW;
+
+              if (fullMeasured > 0) {
+                const preText = item.str.substring(0, subStart);
+                const matchText = item.str.substring(subStart, subEnd);
+                const preWidth = ctx.measureText(preText).width;
+                const matchWidth = ctx.measureText(matchText).width;
+                const scale = itemCanvasWidth / fullMeasured;
+                matchX = itemCanvasX + (preWidth * scale);
+                matchW = Math.max(matchWidth * scale, 4);
+              } else {
+                matchX = itemCanvasX + ((subStart / strLen) * itemCanvasWidth);
+                matchW = Math.max(((subEnd - subStart) / strLen) * itemCanvasWidth, 4);
               }
 
-              const safeStr = sanitizeForPDF(item.str);
-              if (safeStr && safeStr.trim()) {
+              // Clamped bounding box with 2px padding
+              const pad = 2;
+              const boxX = Math.max(0, matchX - pad);
+              const boxY = Math.max(0, itemCanvasY - pad);
+              const boxW = Math.min(viewport.width - boxX, matchW + (pad * 2));
+              const boxH = Math.min(viewport.height - boxY, itemCanvasH + (pad * 2));
+
+              // Fill solid black rectangle
+              ctx.fillStyle = '#111111';
+              ctx.fillRect(boxX, boxY, boxW, boxH);
+
+              // Replacement label: clipped cleanly within the box (guarantees zero overflow)
+              const label = pii.suggested || '[REDACTED]';
+              const maxFont = Math.min(item.fontSize * 0.65, 8) * renderScale;
+
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(boxX, boxY, boxW, boxH);
+              ctx.clip();
+
+              ctx.fillStyle = '#ffffff';
+              ctx.textBaseline = 'middle';
+              ctx.textAlign = 'center';
+
+              ctx.font = `600 ${maxFont}px "Segoe UI", Helvetica, Arial, sans-serif`;
+              const labelW = ctx.measureText(label).width;
+
+              if (labelW <= boxW - 4 && boxW >= 24) {
+                ctx.fillText(label, boxX + (boxW / 2), boxY + (boxH / 2));
+              } else if (boxW >= 36) {
+                const shortLabel = '[REDACTED]';
+                const fitFont = Math.max(Math.min((boxW - 6) / shortLabel.length * 1.5, maxFont), 5 * renderScale);
+                ctx.font = `600 ${fitFont}px "Segoe UI", Helvetica, Arial, sans-serif`;
+                ctx.fillText(shortLabel, boxX + (boxW / 2), boxY + (boxH / 2));
+              }
+              ctx.restore();
+
+              // Track redactions for the invisible text layer
+              if (!itemRedactions.has(itemIdx)) {
+                itemRedactions.set(itemIdx, []);
+              }
+              itemRedactions.get(itemIdx).push({
+                subStart,
+                subEnd,
+                label
+              });
+            }
+          }
+
+          // ── c) Embed rendered canvas as page-sized image ──────────────────
+          const imgBytes = await new Promise((resolve, reject) => {
+            canvas.toBlob(async (blob) => {
+              if (!blob) return reject(new Error('Canvas toBlob failed'));
+              resolve(new Uint8Array(await blob.arrayBuffer()));
+            }, 'image/jpeg', 0.95);
+          });
+          canvas.width = 0;
+          canvas.height = 0;
+          const jpg = await newPdf.embedJpg(imgBytes);
+
+          const newPage = newPdf.addPage([origVP.width, origVP.height]);
+          newPage.drawImage(jpg, { x: 0, y: 0, width: origVP.width, height: origVP.height });
+
+          // ── d) Invisible text layer for copy-paste ────────────────────────
+          for (let i = 0; i < pageItems.length; i++) {
+            const item = pageItems[i];
+
+            if (itemRedactions.has(i)) {
+              // Construct safe text by replacing redacted substrings
+              const slices = itemRedactions.get(i).sort((a, b) => b.subStart - a.subStart);
+              let safeText = item.str;
+              for (const sl of slices) {
+                const safeLabel = sanitizeForPDF(sl.label);
+                safeText = safeText.substring(0, sl.subStart) + (safeLabel ? ` ${safeLabel} ` : ' ') + safeText.substring(sl.subEnd);
+              }
+              const sanitized = sanitizeForPDF(safeText);
+              if (sanitized && sanitized.trim()) {
                 try {
-                  newPage.drawText(safeStr, {
+                  newPage.drawText(sanitized, {
                     x: item.pdfX,
                     y: item.pdfY,
                     size: item.fontSize,
@@ -535,113 +623,141 @@ export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], _isP
                   });
                 } catch (_) { /* skip unencodable text */ }
               }
+              continue;
             }
-          } finally {
-            if (page && page.cleanup) page.cleanup();
-          }
-        }
 
-        const pdfBytes = await newPdf.save();
-        downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), filename);
-        return { success: true, preservedFormat: true };
-      } catch (pdfError) {
-        console.error('PDF export failed, falling back to text PDF:', pdfError);
-      } finally {
-        if (pdfSrc && pdfSrc.destroy) {
-          pdfSrc.destroy();
+            const safeStr = sanitizeForPDF(item.str);
+            if (safeStr && safeStr.trim()) {
+              try {
+                newPage.drawText(safeStr, {
+                  x: item.pdfX,
+                  y: item.pdfY,
+                  size: item.fontSize,
+                  font: textFont,
+                  color: rgb(0, 0, 0),
+                  opacity: 0.01,
+                });
+              } catch (_) { /* skip unencodable text */ }
+            }
+          }
+        } finally {
+          if (page && page.cleanup) page.cleanup();
         }
+      }
+
+      const pdfBytes = await newPdf.save();
+      return { blob: new Blob([pdfBytes], { type: 'application/pdf' }), filename, preservedFormat: true };
+    } catch (pdfError) {
+      console.error('PDF export failed, falling back to text PDF:', pdfError);
+    } finally {
+      if (pdfSrc && pdfSrc.destroy) {
+        pdfSrc.destroy();
       }
     }
+  }
 
-    // ── Strategy 2: New PDF from redacted text with formatting ──────────────
-    const sanitized = sanitizeForPDF(text);
-    const pdfDoc = await PDFDocument.create();
-    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  // ── Strategy 2: New PDF from redacted text with formatting ──────────────
+  const sanitized = sanitizeForPDF(text);
+  const pdfDoc = await PDFDocument.create();
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const bodySize = 10;
-    const headingSize = 12;
-    const nameSize = 14;
-    const margin = 50;
-    const pageW = 595;
-    const pageH = 842;
-    const maxW = pageW - 2 * margin;
-    const bodyLH = bodySize * 1.5;
-    const headingLH = headingSize * 1.8;
-    const nameLH = nameSize * 1.6;
+  const bodySize = 10;
+  const headingSize = 12;
+  const nameSize = 14;
+  const margin = 50;
+  const pageW = 595;
+  const pageH = 842;
+  const maxW = pageW - 2 * margin;
+  const bodyLH = bodySize * 1.5;
+  const headingLH = headingSize * 1.8;
+  const nameLH = nameSize * 1.6;
 
-    let page = pdfDoc.addPage([pageW, pageH]);
-    let y = pageH - margin;
+  let page = pdfDoc.addPage([pageW, pageH]);
+  let y = pageH - margin;
 
-    const lines = sanitized.split('\n');
+  const lines = sanitized.split('\n');
 
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
 
-      if (!trimmed) {
-        y -= bodyLH * 0.5;
-        if (y < margin + bodyLH) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
-        continue;
-      }
+    if (!trimmed) {
+      y -= bodyLH * 0.5;
+      if (y < margin + bodyLH) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
+      continue;
+    }
 
-      const isSection =
-        SECTION_RE.test(trimmed) ||
-        (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && trimmed.length < 50 &&
-          /[A-Z]/.test(trimmed) && !trimmed.includes('['));
+    const isSection =
+      SECTION_RE.test(trimmed) ||
+      (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && trimmed.length < 50 &&
+        /[A-Z]/.test(trimmed) && !trimmed.includes('['));
 
-      const isFirstLine =
-        i === lines.slice(0, i + 1).findIndex((l) => l.trim()) &&
-        !trimmed.includes('@') && !trimmed.includes('://');
+    const isFirstLine =
+      i === lines.slice(0, i + 1).findIndex((l) => l.trim()) &&
+      !trimmed.includes('@') && !trimmed.includes('://');
 
-      let font, size, lh;
+    let font, size, lh;
 
-      if (isFirstLine) {
-        font = fontBold; size = nameSize; lh = nameLH;
-      } else if (isSection) {
-        font = fontBold; size = headingSize; lh = headingLH;
-        y -= 8;
-        if (y < margin + lh) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
-      } else {
-        font = fontRegular; size = bodySize; lh = bodyLH;
-      }
+    if (isFirstLine) {
+      font = fontBold; size = nameSize; lh = nameLH;
+    } else if (isSection) {
+      font = fontBold; size = headingSize; lh = headingLH;
+      y -= 8;
+      if (y < margin + lh) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
+    } else {
+      font = fontRegular; size = bodySize; lh = bodyLH;
+    }
 
-      // Word-wrap and draw
-      const words = trimmed.split(' ');
-      let currentLine = '';
+    // Word-wrap and draw
+    const words = trimmed.split(' ');
+    let currentLine = '';
 
-      for (const word of words) {
-        const test = currentLine ? `${currentLine} ${word}` : word;
-        if (font.widthOfTextAtSize(test, size) > maxW && currentLine) {
-          if (y < margin + lh) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
-          page.drawText(currentLine, { x: margin, y, size, font, color: rgb(0.1, 0.1, 0.1) });
-          y -= lh;
-          currentLine = word;
-        } else {
-          currentLine = test;
-        }
-      }
-
-      if (currentLine) {
+    for (const word of words) {
+      const test = currentLine ? `${currentLine} ${word}` : word;
+      if (font.widthOfTextAtSize(test, size) > maxW && currentLine) {
         if (y < margin + lh) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
         page.drawText(currentLine, { x: margin, y, size, font, color: rgb(0.1, 0.1, 0.1) });
         y -= lh;
-      }
-
-      // Underline after section headers
-      if (isSection) {
-        page.drawLine({
-          start: { x: margin, y: y + lh * 0.3 },
-          end: { x: pageW - margin, y: y + lh * 0.3 },
-          thickness: 0.5,
-          color: rgb(0.6, 0.6, 0.6),
-        });
-        y -= 4;
+        currentLine = word;
+      } else {
+        currentLine = test;
       }
     }
 
-    const pdfBytes = await pdfDoc.save();
-    downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), filename);
-    return { success: true };
+    if (currentLine) {
+      if (y < margin + lh) { page = pdfDoc.addPage([pageW, pageH]); y = pageH - margin; }
+      page.drawText(currentLine, { x: margin, y, size, font, color: rgb(0.1, 0.1, 0.1) });
+      y -= lh;
+    }
+
+    // Underline after section headers
+    if (isSection) {
+      page.drawLine({
+        start: { x: margin, y: y + lh * 0.3 },
+        end: { x: pageW - margin, y: y + lh * 0.3 },
+        thickness: 0.5,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+      y -= 4;
+    }
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  return { blob: new Blob([pdfBytes], { type: 'application/pdf' }), filename, preservedFormat: false };
+};
+
+/**
+ * Export as PDF — triggers browser download.
+ */
+export const exportAsPDF = async (text, uploadedFile = null, piiItems = [], _isPro = false, originalFilename = null) => {
+  try {
+    const isPro = await verifyProStatus();
+    if (!isPro) {
+      return { success: false, error: 'Pro license required for PDF export. Cryptographic signature verification failed.' };
+    }
+    const result = await generatePDFBlob(text, uploadedFile, piiItems, isPro, originalFilename);
+    downloadBlob(result.blob, result.filename);
+    return { success: true, preservedFormat: result.preservedFormat };
   } catch (error) {
     return { success: false, error: error.message };
   }

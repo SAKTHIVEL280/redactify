@@ -1,11 +1,11 @@
-# Resume Redactor - Privacy-First Document Anonymizer
+# Redactify - Privacy-First Document Anonymizer
 
-![Resume Redactor](https://img.shields.io/badge/PWA-Ready-blue)
+![Redactify](https://img.shields.io/badge/PWA-Ready-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![Vite](https://img.shields.io/badge/Vite-5-646cff)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-A browser-based, privacy-first tool that detects and removes personally identifiable information (PII) from resumes and documents **entirely on the client side**, with zero uploads to servers.
+A browser-based, privacy-first tool that detects and removes personally identifiable information (PII) from resumes, business documents, contracts, and legal files **entirely on the client side**, with zero uploads to servers.
 
 **🆕 Now with Pro Tier:** DOCX/PDF export, ad-free experience, and advanced features via Razorpay payment integration!
 

@@ -7,6 +7,7 @@
 
 import crypto from 'crypto';
 import { createRateLimiter, getClientIp, applyRateLimit } from './lib/rateLimit.js';
+import { signLicense } from './lib/licenseSigner.js';
 
 const checkRateLimit = createRateLimiter(60 * 1000, 5); // 5 req/min/IP
 
@@ -22,7 +23,7 @@ function generateLicenseKey() {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.daeq.in,http://localhost:5173,http://localhost:3000,http://localhost:4173')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -97,7 +98,7 @@ export default async function handler(req, res) {
     if (supabaseUrlEnv && supabaseKey) {
       try {
         const checkResponse = await fetch(
-          `${supabaseUrlEnv}/rest/v1/pro_licenses?payment_id=eq.${encodeURIComponent(razorpay_payment_id)}&is_active=eq.true&select=license_key,payment_id,order_id`,
+          `${supabaseUrlEnv}/rest/v1/pro_licenses?payment_id=eq.${encodeURIComponent(razorpay_payment_id)}&is_active=eq.true&select=license_key,payment_id,order_id,purchased_at`,
           {
             method: 'GET',
             headers: {
@@ -110,11 +111,22 @@ export default async function handler(req, res) {
         if (checkResponse.ok) {
           const existing = await checkResponse.json();
           if (Array.isArray(existing) && existing.length > 0) {
-            return res.status(200).json({
-              success: true,
-              licenseKey: existing[0].license_key,
+            const reissuedData = {
+              key: existing[0].license_key,
               paymentId: existing[0].payment_id,
               orderId: existing[0].order_id,
+              purchasedAt: existing[0].purchased_at || new Date().toISOString(),
+              type: 'pro_lifetime'
+            };
+            const signature = signLicense(reissuedData);
+            return res.status(200).json({
+              success: true,
+              licenseKey: reissuedData.key,
+              paymentId: reissuedData.paymentId,
+              orderId: reissuedData.orderId,
+              purchasedAt: reissuedData.purchasedAt,
+              type: reissuedData.type,
+              signature,
               reissued: true
             });
           }
@@ -127,6 +139,15 @@ export default async function handler(req, res) {
     // Payment verified successfully
     // Generate new license key
     const licenseKey = generateLicenseKey();
+    const purchasedAt = new Date().toISOString();
+    const licensePayload = {
+      key: licenseKey,
+      paymentId: razorpay_payment_id,
+      orderId: razorpay_order_id,
+      purchasedAt: purchasedAt,
+      type: 'pro_lifetime'
+    };
+    const signature = signLicense(licensePayload);
 
     // Store in Supabase for server-side verification and recovery
     if (supabaseUrlEnv && supabaseKey) {
@@ -143,7 +164,7 @@ export default async function handler(req, res) {
             license_key: licenseKey,
             payment_id: razorpay_payment_id,
             order_id: razorpay_order_id,
-            purchased_at: new Date().toISOString(),
+            purchased_at: purchasedAt,
             is_active: true,
           })
         });
@@ -156,7 +177,7 @@ export default async function handler(req, res) {
           if (response.status === 409) {
             try {
               const retryRes = await fetch(
-                `${supabaseUrlEnv}/rest/v1/pro_licenses?payment_id=eq.${encodeURIComponent(razorpay_payment_id)}&select=license_key,payment_id,order_id`,
+                `${supabaseUrlEnv}/rest/v1/pro_licenses?payment_id=eq.${encodeURIComponent(razorpay_payment_id)}&select=license_key,payment_id,order_id,purchased_at`,
                 {
                   method: 'GET',
                   headers: {
@@ -169,11 +190,22 @@ export default async function handler(req, res) {
               if (retryRes.ok) {
                 const retryData = await retryRes.json();
                 if (Array.isArray(retryData) && retryData.length > 0) {
-                  return res.status(200).json({
-                    success: true,
-                    licenseKey: retryData[0].license_key,
+                  const retryPayload = {
+                    key: retryData[0].license_key,
                     paymentId: retryData[0].payment_id,
                     orderId: retryData[0].order_id,
+                    purchasedAt: retryData[0].purchased_at || purchasedAt,
+                    type: 'pro_lifetime'
+                  };
+                  const retrySig = signLicense(retryPayload);
+                  return res.status(200).json({
+                    success: true,
+                    licenseKey: retryPayload.key,
+                    paymentId: retryPayload.paymentId,
+                    orderId: retryPayload.orderId,
+                    purchasedAt: retryPayload.purchasedAt,
+                    type: retryPayload.type,
+                    signature: retrySig,
                     reissued: true
                   });
                 }
@@ -184,16 +216,19 @@ export default async function handler(req, res) {
           }
         }
       } catch (dbError) {
-        // Log but don't fail - client will still get license key
+        // Log but don't fail - client will still get signed license key
         console.error('Supabase storage error (non-critical):', dbError.message || dbError);
       }
     }
 
     return res.status(200).json({
       success: true,
-      licenseKey: licenseKey,
-      paymentId: razorpay_payment_id,
-      orderId: razorpay_order_id,
+      licenseKey: licensePayload.key,
+      paymentId: licensePayload.paymentId,
+      orderId: licensePayload.orderId,
+      purchasedAt: licensePayload.purchasedAt,
+      type: licensePayload.type,
+      signature: signature
     });
   } catch (error) {
     console.error('Payment verification error:', error);

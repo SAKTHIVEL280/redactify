@@ -1,6 +1,7 @@
 // IndexedDB utility for Pro license key storage with encryption
 // Falls back to localStorage in Safari private mode
-import { checkIndexedDB, localStorageFallback } from './browserCompat';
+import { checkIndexedDB, localStorageFallback } from './browserCompat.js';
+import { verifyLicenseSignature } from './licenseCrypto.js';
 
 const DB_NAME = 'ResumeRedactorDB';
 const DB_VERSION = 5; // Must match customRulesDB version
@@ -141,16 +142,28 @@ const initDB = async () => {
 // Store Pro license key with localStorage fallback
 export const storeProKey = async (licenseData) => {
   try {
+    if (!licenseData) {
+      throw new Error('License data is required');
+    }
+
     const plainData = {
-      key: licenseData.key,
-      orderId: licenseData.orderId,
-      paymentId: licenseData.paymentId,
-      purchasedAt: licenseData.purchasedAt || new Date().toISOString(),
+      key: licenseData.key || licenseData.licenseKey,
+      orderId: licenseData.orderId || licenseData.order_id,
+      paymentId: licenseData.paymentId || licenseData.payment_id,
+      purchasedAt: licenseData.purchasedAt || licenseData.purchased_at || new Date().toISOString(),
       expiresAt: null, // One-time purchase, no expiry
+      type: licenseData.type || 'pro_lifetime',
+      signature: licenseData.signature,
       isActive: true
     };
+
+    // Mathematically verify asymmetric ECDSA P-256 signature
+    const isValidSignature = await verifyLicenseSignature(plainData);
+    if (!isValidSignature) {
+      throw new Error('License signature verification failed: invalid, forged, or missing cryptographic signature.');
+    }
     
-    // Encrypt sensitive data
+    // Encrypt verified data for local storage
     const encryptedData = await encryptData(plainData);
     
     const data = {
@@ -174,6 +187,8 @@ export const storeProKey = async (licenseData) => {
       await localStorageFallback.setItem(LOCALSTORAGE_KEY, data);
     }
     
+    // Notify application of license activation
+    window.dispatchEvent(new CustomEvent('licenseStatusChanged', { detail: { isPro: true, data: plainData } }));
     return { success: true, data: plainData };
   } catch (error) {
     console.error('Error storing Pro key:', error);
@@ -205,6 +220,13 @@ export const getProKey = async () => {
       try {
         const decryptedData = await decryptData(result.encrypted);
         if (decryptedData && decryptedData.isActive) {
+          // Cryptographic asymmetric signature verification
+          const isSignatureValid = await verifyLicenseSignature(decryptedData);
+          if (!isSignatureValid) {
+            console.warn('License signature verification failed for stored record. Cleaning up forged record.');
+            await deleteProKey();
+            return { isValid: false, data: null, error: 'Cryptographic signature verification failed' };
+          }
           return { isValid: true, data: decryptedData };
         }
       } catch (decryptError) {
@@ -226,6 +248,34 @@ export const verifyProStatus = async () => {
   return result.isValid;
 };
 
+// Check if license was revoked remotely (refund / chargeback)
+export const checkRevocationStatus = async () => {
+  try {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return { revoked: false, offline: true };
+    }
+    const current = await getProKey();
+    if (!current.isValid || !current.data) return { revoked: false };
+
+    const { key, paymentId } = current.data;
+    const response = await fetch(`/api/check-revocation?key=${encodeURIComponent(key || '')}&paymentId=${encodeURIComponent(paymentId || '')}`);
+    if (!response.ok) return { revoked: false };
+    
+    const resData = await response.json();
+    if (resData.revoked) {
+      console.warn('License has been revoked remotely. Revoking local Pro access.');
+      await deleteProKey();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('licenseStatusChanged', { detail: { isPro: false, revoked: true, reason: resData.reason } }));
+      }
+      return { revoked: true, reason: resData.reason };
+    }
+    return { revoked: false };
+  } catch (err) {
+    return { revoked: false, error: err.message };
+  }
+};
+
 // Delete Pro license (for testing/refund scenarios) with localStorage fallback
 export const deleteProKey = async () => {
   try {
@@ -235,12 +285,44 @@ export const deleteProKey = async () => {
       const transaction = db.transaction([STORE_NAME], 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       await store.delete('pro_license');
-    } else {
-      await localStorageFallback.removeItem(LOCALSTORAGE_KEY);
+    }
+    await localStorageFallback.removeItem(LOCALSTORAGE_KEY);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('redactify_pro_license_encrypted');
+      localStorage.removeItem(LOCALSTORAGE_KEY);
     }
     
     return { success: true };
   } catch (error) {
     console.error('Error deleting Pro key:', error);
     return { success: false, error: error.message };
-  }};
+  }
+};
+
+// Real logout: invalidates local license, purges local storage/IDB, releases locks
+export const logoutPro = async () => {
+  try {
+    await deleteProKey();
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('redactify_pro_license_encrypted');
+      localStorage.removeItem('redactify_vault_salt');
+      localStorage.removeItem(LOCALSTORAGE_KEY);
+    }
+    
+    // Release any active concurrency lock held by this device
+    try {
+      const { releaseRedactionLock } = await import('./concurrencyLock.js');
+      await releaseRedactionLock();
+    } catch (e) {
+      // Ignore lock release failures during logout
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('licenseStatusChanged', { detail: { isPro: false, loggedOut: true } }));
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error during logout:', error);
+    return { success: false, error: error.message };
+  }
+};

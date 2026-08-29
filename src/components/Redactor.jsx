@@ -8,6 +8,8 @@ import { detectSmartPII, mergeDetections } from '../utils/smartDetection';
 import { getFileTypeFromMime } from '../utils/fileHelpers';
 import { showError, showWarning } from '../utils/toast';
 import { getFileSizeLimits } from '../utils/browserCompat';
+import { acquireRedactionLock, releaseRedactionLock } from '../utils/concurrencyLock';
+import { getProKey } from '../utils/proLicenseDB';
 import DocumentViewer from './DocumentViewer';
 
 function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen, onToggleSidebar, selectedPIIId, onSelectPII }) {
@@ -195,6 +197,20 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
 
     try {
       setIsProcessing(true);
+      setError(null);
+
+      // Concurrent redaction lock for Pro users
+      const proStatus = await getProKey();
+      if (proStatus.isValid && proStatus.data?.key) {
+        const lock = await acquireRedactionLock(proStatus.data.key);
+        if (!lock.acquired) {
+          showError(lock.message);
+          setError(lock.message);
+          setIsProcessing(false);
+          return;
+        }
+      }
+
       setUploadedFile(file);
       const detectedType = getFileTypeFromMime(file.type);
       setFileType(detectedType);
@@ -223,6 +239,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
       setText('');
       onPIIDetected([], '', null, null);
     } finally {
+      await releaseRedactionLock();
       if (!signal.aborted) {
         setIsProcessing(false);
       }
@@ -256,6 +273,18 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
       setIsProcessing(true);
       setError(null);
 
+      // Concurrent redaction lock for Pro users
+      const proStatus = await getProKey();
+      if (proStatus.isValid && proStatus.data?.key) {
+        const lock = await acquireRedactionLock(proStatus.data.key);
+        if (!lock.acquired) {
+          showError(lock.message);
+          setError(lock.message);
+          setIsProcessing(false);
+          return;
+        }
+      }
+
       setUploadedFile(file);
       const detectedType = getFileTypeFromMime(file.type);
       setFileType(detectedType);
@@ -283,6 +312,7 @@ function Redactor({ onPIIDetected, detectedPII, isPro, onTogglePII, sidebarOpen,
       setText('');
       onPIIDetected([], '', null, null);
     } finally {
+      await releaseRedactionLock();
       if (!signal.aborted) {
         setIsProcessing(false);
       }
@@ -435,7 +465,7 @@ JavaScript, React, Node.js, Python, AWS, Docker`;
                     onClick={loadSampleResume}
                     className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-4 bg-zinc-900 text-white font-semibold rounded-2xl border border-white/10 hover:border-white/20 hover:bg-zinc-800 transition-all duration-200"
                   >
-                    Try Sample Resume
+                    Try Sample Document
                   </button>
                 </div>
 

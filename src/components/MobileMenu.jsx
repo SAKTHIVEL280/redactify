@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, Home, Zap, Shield, MessageSquare, Key, Menu as MenuIcon, BookOpen, HelpCircle, Info, Layers } from 'lucide-react';
+import { X, Home, Zap, Shield, MessageSquare, Key, Menu as MenuIcon, BookOpen, HelpCircle, Info, Layers, LogOut } from 'lucide-react';
+import { logoutPro } from '../utils/proLicenseDB';
 
 export default function MobileMenu({ isOpen, onClose, currentView, isPro, onNavigate }) {
   if (!isOpen) return null;
@@ -77,13 +78,25 @@ export default function MobileMenu({ isOpen, onClose, currentView, isPro, onNavi
           </div>
         )}
 
-        {/* Pro Badge (if Pro) */}
+        {/* Pro Badge & Logout (if Pro) */}
         {isPro && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-zinc-800">
+          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-zinc-800 flex flex-col gap-2">
             <div className="flex items-center justify-center gap-2 py-2 bg-zinc-800 rounded-lg">
               <span className="text-xs font-bold text-white uppercase tracking-wider">PRO</span>
               <span className="text-xs text-zinc-400">All Features Unlocked</span>
             </div>
+            <button
+              onClick={async () => {
+                if (window.confirm('Deactivate your Pro license on this device?')) {
+                  await logoutPro();
+                  onClose();
+                }
+              }}
+              className="flex items-center justify-center gap-2 py-2 text-xs font-mono text-zinc-400 hover:text-red-400 border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors uppercase tracking-wider"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Deactivate / Logout</span>
+            </button>
           </div>
         )}
       </div>

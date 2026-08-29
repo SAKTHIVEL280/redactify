@@ -1,6 +1,7 @@
 // Vercel Serverless Function: Recover license using payment ID
 
 import { createRateLimiter, getClientIp, applyRateLimit } from './lib/rateLimit.js';
+import { signLicense } from './lib/licenseSigner.js';
 
 const checkRateLimit = createRateLimiter(60 * 1000, 5); // 5 req/min/IP
 
@@ -30,7 +31,7 @@ async function supabaseQuery(endpoint) {
 }
 
 export default async function handler(req, res) {
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.daeq.in,http://localhost:5173,http://localhost:3000,http://localhost:4173')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -76,12 +77,23 @@ export default async function handler(req, res) {
     }
 
     const license = data[0];
-    return res.status(200).json({
-      success: true,
-      licenseKey: license.license_key,
+    const payload = {
+      key: license.license_key,
       paymentId: license.payment_id,
       orderId: license.order_id,
-      purchasedAt: license.purchased_at
+      purchasedAt: license.purchased_at || new Date().toISOString(),
+      type: 'pro_lifetime'
+    };
+    const signature = signLicense(payload);
+
+    return res.status(200).json({
+      success: true,
+      licenseKey: payload.key,
+      paymentId: payload.paymentId,
+      orderId: payload.orderId,
+      purchasedAt: payload.purchasedAt,
+      type: payload.type,
+      signature
     });
   } catch (error) {
     console.error('Recover by payment error:', error);

@@ -7,7 +7,7 @@
  */
 
 import DOMPurify from 'dompurify';
-import { getFileSizeLimits } from './browserCompat';
+import { getFileSizeLimits } from './browserCompat.js';
 
 // ─── PII Type Constants ────────────────────────────────────────────────────────
 
@@ -71,25 +71,25 @@ export const PII_COLORS = {
 const PATTERNS = {
   [PII_TYPES.EMAIL]: /\b[a-zA-Z0-9][a-zA-Z0-9._%+-]{0,63}@[a-zA-Z0-9][a-zA-Z0-9.-]{0,253}\.[a-zA-Z]{2,}\b/gi,
 
+  [PII_TYPES.CREDIT_CARD]: /\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4,6}[-\s]?\d{4,5}[-\s]?\d{3,4}\b/g,
+
+  [PII_TYPES.SSN]: /\b(SSN|Social Security|Social Security Number|SS#)\s*:?\s*(?!000|666|9\d{2})\d{3}[-\s]?(?!00)\d{2}[-\s]?(?!0000)\d{4}\b/gi,
+
+  [PII_TYPES.TAX_ID]: /\b(EIN|Tax ID|TIN)\s*:?\s*\d{2}[-\s]?\d{7}\b|\b(PAN|PAN No|PAN Number|PAN Card)\s*:?\s*[A-Z]{5}\d{4}[A-Z]\b|\b(Aadhaar|Aadhar|UID)\s*:?\s*\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/gi,
+
+  [PII_TYPES.BANK_ACCOUNT]: /\b(Account|Account No|Account Number|A\/C|IBAN)\s*:?\s*[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b|\b(Account|Account No|Account Number|A\/C)\s*:?\s*\d{9,18}\b/gi,
+
+  [PII_TYPES.PASSPORT]: /\b(Passport|Passport No|Passport Number)\s*:?\s*[A-Z]{1,2}[0-9]{6,9}\b/gi,
+
+  [PII_TYPES.DATE_OF_BIRTH]: /\b(DOB|Date of Birth|Born|Birth Date|Birthday)\s*:?\s*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/gi,
+
+  [PII_TYPES.IP_ADDRESS]: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b|\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b/g,
+
   [PII_TYPES.PHONE]: /\+?\d{1,4}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}\b|\b\d{10,14}\b|\b\(\d{3}\)[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
 
   [PII_TYPES.URL]: /(https?:\/\/[^\s,)]+)|(www\.[^\s,)]+)|([a-z0-9-]+\.(com|org|net|io|dev|app|in|co\.in)\/[^\s,)]+)|((linkedin|github|twitter|facebook|instagram|medium|behance)\.com\/[^\s,)]+)|(\b[a-z0-9-]+\.(com|org|net|io|dev|app)\b)/gi,
 
   [PII_TYPES.ADDRESS]: /\b\d+[-/,]?\s*[A-Z][a-z]+(\s+[A-Z][a-z]+){0,3}\s+(Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Circle|Cir|Way|Place|Pl|Parkway|Pkwy|Nagar|Colony|Extension|Ext|Cross|Main)\b/gi,
-
-  [PII_TYPES.SSN]: /\b(SSN|Social Security|Social Security Number|SS#)\s*:?\s*(?!000|666|9\d{2})\d{3}[-\s]?(?!00)\d{2}[-\s]?(?!0000)\d{4}\b/gi,
-
-  [PII_TYPES.CREDIT_CARD]: /\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4,6}[-\s]?\d{4,5}[-\s]?\d{3,4}\b/g,
-
-  [PII_TYPES.DATE_OF_BIRTH]: /\b(DOB|Date of Birth|Born|Birth Date|Birthday)\s*:?\s*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+\d{4}\b/gi,
-
-  [PII_TYPES.PASSPORT]: /\b(Passport|Passport No|Passport Number)\s*:?\s*[A-Z]{1,2}[0-9]{6,9}\b/gi,
-
-  [PII_TYPES.IP_ADDRESS]: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b|\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b/g,
-
-  [PII_TYPES.BANK_ACCOUNT]: /\b(Account|Account No|Account Number|A\/C|IBAN)\s*:?\s*[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b|\b(Account|Account No|Account Number|A\/C)\s*:?\s*\d{9,18}\b/gi,
-
-  [PII_TYPES.TAX_ID]: /\b(EIN|Tax ID|TIN)\s*:?\s*\d{2}[-\s]?\d{7}\b|\b(PAN|PAN No|PAN Number|PAN Card)\s*:?\s*[A-Z]{5}\d{4}[A-Z]\b|\b(Aadhaar|Aadhar|UID)\s*:?\s*\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/gi,
 
   [PII_TYPES.AGE]: /\b(Age|age)\s*:?\s*\d{1,3}\b|\b\d{1,3}\s+years?\s+old\b/gi
 };
@@ -214,7 +214,12 @@ async function extractTextFromPDF(file) {
       }
     }
 
-    return fullText.trim();
+    const trimmed = fullText.trim();
+    if (!trimmed && pdf.numPages > 0) {
+      throw new Error('This PDF appears to be a scanned image or contains no selectable text layer. Automated redaction requires selectable text.');
+    }
+
+    return trimmed;
   } catch (error) {
     throw new Error('Failed to extract text from PDF: ' + error.message);
   } finally {
@@ -308,16 +313,45 @@ export function detectPII(text) {
     });
   });
 
-  // Sort and deduplicate
-  detections.sort((a, b) => a.start - b.start);
+  // Sort and deduplicate with priority resolution
+  const TYPE_PRIORITY = {
+    [PII_TYPES.EMAIL]: 10,
+    [PII_TYPES.CREDIT_CARD]: 9,
+    [PII_TYPES.SSN]: 8,
+    [PII_TYPES.TAX_ID]: 7,
+    [PII_TYPES.BANK_ACCOUNT]: 6,
+    [PII_TYPES.PASSPORT]: 5,
+    [PII_TYPES.DATE_OF_BIRTH]: 4,
+    [PII_TYPES.IP_ADDRESS]: 3,
+    [PII_TYPES.PHONE]: 2,
+    [PII_TYPES.URL]: 1,
+    [PII_TYPES.ADDRESS]: 0,
+    [PII_TYPES.AGE]: 0,
+    [PII_TYPES.NAME]: 0
+  };
+
+  detections.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    const lenDiff = (b.end - b.start) - (a.end - a.start);
+    if (lenDiff !== 0) return lenDiff;
+    return (TYPE_PRIORITY[b.type] || 0) - (TYPE_PRIORITY[a.type] || 0);
+  });
 
   const unique = [];
-  const seen = new Set();
   for (const det of detections) {
-    const key = `${det.start}-${det.end}`;
-    if (!seen.has(key)) {
-      seen.add(key);
+    const conflict = unique.find(r => r.start < det.end && r.end > det.start);
+    if (!conflict) {
       unique.push(det);
+    } else {
+      const detLen = det.end - det.start;
+      const confLen = conflict.end - conflict.start;
+      const detPrio = TYPE_PRIORITY[det.type] || 0;
+      const confPrio = TYPE_PRIORITY[conflict.type] || 0;
+
+      if (detPrio > confPrio && detLen >= confLen) {
+        const idx = unique.indexOf(conflict);
+        unique[idx] = det;
+      }
     }
   }
 
@@ -388,20 +422,28 @@ export function replacePII(text, selections) {
 
   const accepted = selections
     .filter((item) => item.redact === true)
-    .sort((a, b) => b.start - a.start);
+    .sort((a, b) => {
+      if (b.start !== a.start) return b.start - a.start;
+      return (b.end - b.start) - (a.end - a.start);
+    });
+
+  const nonOverlapping = [];
+  let minStart = Infinity;
+
+  for (const item of accepted) {
+    if (item.end <= minStart) {
+      nonOverlapping.push(item);
+      minStart = item.start;
+    }
+  }
 
   let result = text;
-  let lastStart = Infinity; // track the last replacement start to skip overlaps
-
-  accepted.forEach((item) => {
-    // Skip if this item overlaps with a previously applied replacement
-    if (item.end > lastStart) return;
+  for (const item of nonOverlapping) {
     result =
       result.substring(0, item.start) +
       (item.suggested || '[REDACTED]') +
       result.substring(item.end);
-    lastStart = item.start;
-  });
+  }
 
   return result;
 }

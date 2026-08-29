@@ -81,13 +81,21 @@ const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
 
       // Code verified — the API now returns the license key directly
       if (verifyData.licenseKey) {
-        await storeProKey({
+        const storeResult = await storeProKey({
           key: verifyData.licenseKey,
           orderId: verifyData.orderId || 'recovered',
           paymentId: verifyData.paymentId || 'recovered',
-          purchasedAt: new Date().toISOString(),
+          purchasedAt: verifyData.purchasedAt || new Date().toISOString(),
+          type: verifyData.type || 'pro_lifetime',
+          signature: verifyData.signature
         });
         
+        if (!storeResult.success) {
+          setStatus({ type: 'error', message: 'License verification failed: ' + storeResult.error });
+          setLoading(false);
+          return;
+        }
+
         setStep('success');
         setStatus({ type: 'success', message: 'License recovered and activated!' });
         if (onSuccess) onSuccess();
@@ -120,12 +128,20 @@ const LicenseRecovery = ({ isOpen, onClose, onSuccess }) => {
         return;
       }
 
-      await storeProKey({
+      const storeResult = await storeProKey({
         key: data.licenseKey,
         orderId: data.orderId || 'recovered',
         paymentId: data.paymentId || input,
         purchasedAt: data.purchasedAt || new Date().toISOString(),
+        type: data.type || 'pro_lifetime',
+        signature: data.signature
       });
+
+      if (!storeResult.success) {
+        setStatus({ type: 'error', message: 'License verification failed: ' + storeResult.error });
+        setLoading(false);
+        return;
+      }
 
       setStatus({ type: 'success', message: 'License recovered successfully!' });
       setTimeout(() => {

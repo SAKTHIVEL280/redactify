@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Power, Edit2, Save, AlertCircle } from 'lucide-react';
 import { getAllCustomRules, addCustomRule, updateCustomRule, deleteCustomRule, toggleCustomRule } from '../utils/customRulesDB';
+import { verifyProStatus } from '../utils/proLicenseDB';
 
 export default function CustomRulesManager({ isOpen, onClose }) {
   const modalRef = React.useRef(null);
@@ -55,6 +56,13 @@ export default function CustomRulesManager({ isOpen, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Verify Pro license cryptographically before allowing custom rule creation/update
+    const isPro = await verifyProStatus();
+    if (!isPro) {
+      setError('Pro license required to create or modify custom regex rules. Cryptographic signature check failed.');
+      return;
+    }
 
     if (!formData.name.trim()) {
       setError('Rule name is required');

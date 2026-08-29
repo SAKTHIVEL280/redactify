@@ -12,8 +12,8 @@
  *   detectPatternPII(text)            — regex-only (backward compat)
  */
 
-import { detectPII } from './piiDetector';
-import { applyContextAwareFiltering } from './contextAwareDetection';
+import { detectPII } from './piiDetector.js';
+import { applyContextAwareFiltering } from './contextAwareDetection.js';
 
 // ─── Pattern-only detection (re-export for backward compat) ────────────────────
 

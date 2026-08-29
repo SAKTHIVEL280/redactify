@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Menu, X, Zap, PanelRight } from 'lucide-react';
 import Landing from './components/Landing';
 import Redactor from './components/Redactor';
 import Sidebar from './components/Sidebar';
@@ -16,7 +15,9 @@ import FeedbackModal from './components/FeedbackModal';
 import MobileMenu from './components/MobileMenu';
 import ErrorBoundary from './components/ErrorBoundary';
 import BrowserCompatWarning from './components/BrowserCompatWarning';
-import { verifyProStatus } from './utils/proLicenseDB';
+import { verifyProStatus, logoutPro, checkRevocationStatus } from './utils/proLicenseDB';
+import { showSuccess, showError } from './utils/toast';
+import { Menu, X, Zap, PanelRight, LogOut } from 'lucide-react';
 import SeoLandingPage, { SEO_PAGES_DATA } from './components/SeoLandingPages';
 
 function App() {
@@ -96,15 +97,31 @@ function App() {
     }
   }, []);
 
-  // Check Pro status on mount
+  // Check Pro status on mount and listen for real-time changes
   useEffect(() => {
     const checkPro = async () => {
       setIsProLoading(true);
+      // Opportunistic revocation check if online
+      await checkRevocationStatus();
       const isProUser = await verifyProStatus();
       setIsPro(isProUser);
       setIsProLoading(false);
     };
     checkPro();
+
+    const handleLicenseChange = (e) => {
+      if (e.detail) {
+        setIsPro(!!e.detail.isPro);
+        if (e.detail.revoked) {
+          showError('Your Pro license was revoked due to a refund or payment dispute.');
+        } else if (e.detail.loggedOut) {
+          showSuccess('Pro license deactivated on this device.');
+        }
+      }
+    };
+
+    window.addEventListener('licenseStatusChanged', handleLicenseChange);
+    return () => window.removeEventListener('licenseStatusChanged', handleLicenseChange);
   }, []);
 
   // Auto-open sidebar when PII is first detected
@@ -309,9 +326,23 @@ function App() {
                 Upgrade
               </button>
             ) : (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30 rounded-full backdrop-blur-sm" title="All Pro features unlocked">
-                <Zap className="w-3.5 h-3.5 text-red-400" />
-                <span className="text-xs font-bold text-white uppercase tracking-wider">PRO</span>
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30 rounded-full backdrop-blur-sm" title="All Pro features unlocked">
+                  <Zap className="w-3.5 h-3.5 text-red-400" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">PRO</span>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Deactivate your Pro license on this device? You can reactivate anytime using your payment ID or recovery email.')) {
+                      await logoutPro();
+                    }
+                  }}
+                  className="flex items-center gap-1 text-xs font-mono text-zinc-400 hover:text-red-400 transition-colors uppercase tracking-wider px-2 py-1 rounded hover:bg-white/5"
+                  title="Deactivate Pro license on this device"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Logout</span>
+                </button>
               </div>
             )}
 

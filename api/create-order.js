@@ -12,7 +12,7 @@ const checkRateLimit = createRateLimiter(60 * 1000, 5); // 5 req/min/IP
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.daeq.in,http://localhost:5173,http://localhost:3000,http://localhost:4173')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
       currency: currency,
       receipt: `receipt_${Date.now()}`,
       notes: {
-        product: 'Resume Redactor Pro License',
+        product: 'Redactify Pro License',
         type: 'lifetime',
       },
     };

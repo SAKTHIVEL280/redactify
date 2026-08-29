@@ -1,4 +1,5 @@
 import { createRateLimiter, getClientIp, applyRateLimit } from './lib/rateLimit.js';
+import { signLicense } from './lib/licenseSigner.js';
 
 const checkRateLimit = createRateLimiter(60 * 1000, 5); // 5 req/min/IP
 
@@ -27,7 +28,7 @@ async function supabaseQuery(endpoint, method = 'GET', body = null) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.daeq.in,http://localhost:5173,http://localhost:3000,http://localhost:4173')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -123,7 +124,7 @@ export default async function handler(req, res) {
 
     // Fetch the license key to return to the client
     const licenses = await supabaseQuery(
-      `pro_licenses?email=eq.${encodeURIComponent(emailLower)}&is_active=eq.true&select=license_key,order_id,payment_id&order=created_at.desc&limit=1`,
+      `pro_licenses?email=eq.${encodeURIComponent(emailLower)}&is_active=eq.true&select=license_key,order_id,payment_id,purchased_at&order=created_at.desc&limit=1`,
       'GET'
     );
 
@@ -135,13 +136,24 @@ export default async function handler(req, res) {
     }
 
     const license = licenses[0];
+    const payload = {
+      key: license.license_key,
+      orderId: license.order_id,
+      paymentId: license.payment_id,
+      purchasedAt: license.purchased_at || new Date().toISOString(),
+      type: 'pro_lifetime'
+    };
+    const signature = signLicense(payload);
 
     res.status(200).json({ 
       success: true, 
       verified: true,
-      licenseKey: license.license_key,
-      orderId: license.order_id,
-      paymentId: license.payment_id
+      licenseKey: payload.key,
+      orderId: payload.orderId,
+      paymentId: payload.paymentId,
+      purchasedAt: payload.purchasedAt,
+      type: payload.type,
+      signature
     });
   } catch (error) {
     console.error('Error verifying code:', error);

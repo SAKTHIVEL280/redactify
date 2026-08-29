@@ -16,7 +16,7 @@ function isValidEmail(email) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.daeq.in,http://localhost:5173,http://localhost:3000,http://localhost:4173')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
 
   try {
     const feedbackTo = process.env.FEEDBACK_TO_EMAIL || 'sakthivel.hsr06@gmail.com';
-    const senderEmail = process.env.FEEDBACK_FROM_EMAIL || 'onboarding@resend.dev';
+    const senderEmail = 'onboarding@resend.dev';
 
     if (!process.env.RESEND_API_KEY) {
       return res.status(500).json({ 

@@ -72,8 +72,5 @@ export default defineConfig({
       }
     },
     chunkSizeWarningLimit: 1000
-  },
-  optimizeDeps: {
-    include: ['@supabase/supabase-js']
   }
 })

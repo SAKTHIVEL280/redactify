@@ -7,6 +7,9 @@ import { getEnabledCustomRules, applyCustomRules } from '../utils/customRulesDB'
 import { exportBatchAsZip } from '../utils/batchExportUtils';
 import { isValidFileType, formatFileSize } from '../utils/fileHelpers';
 import { getFileSizeLimits } from '../utils/browserCompat';
+import { acquireRedactionLock, releaseRedactionLock } from '../utils/concurrencyLock';
+import { getProKey } from '../utils/proLicenseDB';
+import { showError } from '../utils/toast';
 
 export default function BatchProcessor({ isOpen, onClose }) {
   const modalRef = React.useRef(null);
@@ -99,57 +102,71 @@ export default function BatchProcessor({ isOpen, onClose }) {
     setProcessing(true);
     setProgress({ current: 0, total: filesToProcess.length });
 
-    // Load custom rules once
-    const customRules = await getEnabledCustomRules();
-
-    for (let i = 0; i < filesToProcess.length; i++) {
-      const file = filesToProcess[i];
-      
-      setProgress({ current: i + 1, total: filesToProcess.length });
-      setFiles(prev => prev.map(f => 
-        f.id === file.id ? { ...f, status: 'processing' } : f
-      ));
-
-      try {
-        // Extract text from file
-        const text = await extractTextFromInput(file.file);
-        
-        // Detect PII with smart detection (ML if loaded + regex + context filtering)
-        const mlFn = isModelLoaded && detectWithML ? detectWithML : null;
-        const smartDetections = await detectSmartPII(text, mlFn);
-
-        // Apply custom rules using the shared utility (consistent type + ReDoS protection)
-        const customDetections = customRules && customRules.length > 0 
-          ? applyCustomRules(text, customRules) 
-          : [];
-        
-        // Merge with proper priority handling
-        const detected = mergeDetections(smartDetections, customDetections);
-        
-        setFiles(prev => prev.map(f => 
-          f.id === file.id 
-            ? { 
-                ...f, 
-                status: 'complete',
-                originalText: text,
-                piiItems: detected,
-                piiDetected: detected.filter(p => p.redact).length
-              } 
-            : f
-        ));
-      } catch (error) {
-        setFiles(prev => prev.map(f => 
-          f.id === file.id 
-            ? { ...f, status: 'error', error: error.message } 
-            : f
-        ));
+    // Acquire concurrency lock
+    const proStatus = await getProKey();
+    if (proStatus.isValid && proStatus.data?.key) {
+      const lock = await acquireRedactionLock(proStatus.data.key);
+      if (!lock.acquired) {
+        showError(lock.message);
+        setProcessing(false);
+        return;
       }
-
-      // Small delay to show progress
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    setProcessing(false);
+    try {
+      // Load custom rules once
+      const customRules = await getEnabledCustomRules();
+
+      for (let i = 0; i < filesToProcess.length; i++) {
+        const file = filesToProcess[i];
+        
+        setProgress({ current: i + 1, total: filesToProcess.length });
+        setFiles(prev => prev.map(f => 
+          f.id === file.id ? { ...f, status: 'processing' } : f
+        ));
+
+        try {
+          // Extract text from file
+          const text = await extractTextFromInput(file.file);
+          
+          // Detect PII with smart detection (ML if loaded + regex + context filtering)
+          const mlFn = isModelLoaded && detectWithML ? detectWithML : null;
+          const smartDetections = await detectSmartPII(text, mlFn);
+
+          // Apply custom rules using the shared utility (consistent type + ReDoS protection)
+          const customDetections = customRules && customRules.length > 0 
+            ? applyCustomRules(text, customRules) 
+            : [];
+          
+          // Merge with proper priority handling
+          const detected = mergeDetections(smartDetections, customDetections);
+          
+          setFiles(prev => prev.map(f => 
+            f.id === file.id 
+              ? { 
+                  ...f, 
+                  status: 'complete',
+                  originalText: text,
+                  piiItems: detected,
+                  piiDetected: detected.filter(p => p.redact).length
+                } 
+              : f
+          ));
+        } catch (error) {
+          setFiles(prev => prev.map(f => 
+            f.id === file.id 
+              ? { ...f, status: 'error', error: error.message } 
+              : f
+          ));
+        }
+
+        // Small delay to show progress
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } finally {
+      await releaseRedactionLock();
+      setProcessing(false);
+    }
   };
 
   const handleExport = async (format) => {
@@ -160,6 +177,8 @@ export default function BatchProcessor({ isOpen, onClose }) {
         .filter(f => f.status === 'complete')
         .map(f => ({
           name: f.name.replace(/\.[^/.]+$/, ''), // Remove extension
+          file: f.file,
+          fileType: f.fileType,
           originalText: f.originalText,
           piiItems: f.piiItems,
           redactedText: replacePII(f.originalText, f.piiItems)
@@ -436,20 +455,36 @@ export default function BatchProcessor({ isOpen, onClose }) {
               {completedCount > 0 && !processing && (
                 <>
                   <button
-                    onClick={() => handleExport('txt')}
+                    onClick={() => handleExport('original')}
                     disabled={exporting}
-                    className="flex-1 px-6 py-4 bg-zinc-800 border border-white/10 text-white rounded-xl font-bold hover:bg-zinc-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="flex-1 px-5 py-3.5 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg text-sm"
+                    title="Preserves original formatting: DOCX remains DOCX, PDF remains PDF"
                   >
-                    <Download className="w-5 h-5" />
-                    Export as TXT (ZIP)
+                    <Download className="w-4 h-4" />
+                    Export Formats Preserved (ZIP)
                   </button>
                   <button
                     onClick={() => handleExport('pdf')}
                     disabled={exporting}
-                    className="flex-1 px-6 py-4 bg-zinc-800 border border-white/10 text-white rounded-xl font-bold hover:bg-zinc-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="px-4 py-3.5 bg-zinc-800 border border-white/10 text-white rounded-xl font-bold hover:bg-zinc-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
                   >
-                    <Download className="w-5 h-5" />
-                    Export as PDF (ZIP)
+                    <Download className="w-4 h-4" />
+                    PDF (ZIP)
+                  </button>
+                  <button
+                    onClick={() => handleExport('docx')}
+                    disabled={exporting}
+                    className="px-4 py-3.5 bg-zinc-800 border border-white/10 text-white rounded-xl font-bold hover:bg-zinc-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    DOCX (ZIP)
+                  </button>
+                  <button
+                    onClick={() => handleExport('txt')}
+                    disabled={exporting}
+                    className="px-4 py-3.5 bg-zinc-800 border border-white/10 text-zinc-300 rounded-xl font-medium hover:bg-zinc-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                  >
+                    TXT
                   </button>
                 </>
               )}

@@ -1,0 +1,26 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: white; padding: 30px; }
+h2 { margin-bottom: 20px; text-align: center; }
+.container { display: flex; gap: 24px; justify-content: center; }
+.col { flex: 1; max-width: 580px; }
+.label { font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+</head>
+<body>
+<h2>DOCX Batch Export Table Preservation: Side-by-Side Comparison</h2>
+<div class="container">
+  <div class="col">
+    <div class="label">Original DOCX (Before Redaction)</div>
+    <div style='font-family: Arial, sans-serif; padding: 20px; background: white; color: black; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);'><p style='text-align: center; font-weight: bold;'>CONFIDENTIAL VENDOR AGREEMENT</p><p style='text-align: left; font-weight: normal;'>This document contains formatted table data and proprietary company records.</p><table style='border-collapse: collapse; width: 100%; margin-top: 15px; border: 1px solid #ccc;'><tr><td style='border: 1px solid #ccc; padding: 8px 12px; background: #f3f4f6; font-weight: bold; font-size: 13px;'>Department</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: #f3f4f6; font-weight: bold; font-size: 13px;'>Contact Email (PII)</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: #f3f4f6; font-weight: bold; font-size: 13px;'>Emergency Phone (PII)</td></tr><tr><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>Engineering</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>eng-lead@techcorp-innovations.com</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>555-888-1234</td></tr><tr><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>Executive</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>ceo-private@techcorp-innovations.com</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>555-999-5678</td></tr></table></div>
+  </div>
+  <div class="col">
+    <div class="label">Exported DOCX (After Format-Preserved Redaction)</div>
+    <div style='font-family: Arial, sans-serif; padding: 20px; background: white; color: black; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);'><p style='text-align: center; font-weight: normal;'>[NAME REDACTED]</p><p style='text-align: left; font-weight: normal;'>This document contains formatted table data and proprietary company records.</p><table style='border-collapse: collapse; width: 100%; margin-top: 15px; border: 1px solid #ccc;'><tr><td style='border: 1px solid #ccc; padding: 8px 12px; background: #f3f4f6; font-weight: bold; font-size: 13px;'>Department</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: #f3f4f6; font-weight: bold; font-size: 13px;'>Contact Email (PII)</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: #f3f4f6; font-weight: bold; font-size: 13px;'>Emergency Phone (PII)</td></tr><tr><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>Engineering</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>[EMAIL REDACTED]</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>[PHONE REDACTED]</td></tr><tr><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>Executive</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>[EMAIL REDACTED]</td><td style='border: 1px solid #ccc; padding: 8px 12px; background: white; font-weight: normal; font-size: 13px;'>[PHONE REDACTED]</td></tr></table></div>
+  </div>
+</div>
+</body>
+</html>

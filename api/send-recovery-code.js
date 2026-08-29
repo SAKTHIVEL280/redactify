@@ -28,7 +28,7 @@ async function supabaseQuery(endpoint, method = 'GET', body = null) {
 
 export default async function handler(req, res) {
   // CORS headers
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.app,https://redactify.daeq.in,http://localhost:5173,http://localhost:3000')
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://redactify.daeq.in,http://localhost:5173,http://localhost:3000,http://localhost:4173')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
 
     // Lazy Resend initialization
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const fromAddress = 'onboarding@resend.dev';
 
     // Send email via Resend
     await resend.emails.send({

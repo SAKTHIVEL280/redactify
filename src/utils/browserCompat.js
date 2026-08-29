@@ -8,7 +8,7 @@
  * Safari private mode blocks IndexedDB
  */
 export async function checkIndexedDB() {
-  if (!window.indexedDB) {
+  if (typeof window === 'undefined' || !window.indexedDB) {
     return { available: false, reason: 'IndexedDB not supported' };
   }
 
@@ -155,6 +155,7 @@ export async function checkBrowserCompatibility() {
 export const localStorageFallback = {
   async getItem(key) {
     try {
+      if (typeof localStorage === 'undefined') return null;
       const value = localStorage.getItem(key);
       return value ? JSON.parse(value) : null;
     } catch (error) {
@@ -165,6 +166,7 @@ export const localStorageFallback = {
 
   async setItem(key, value) {
     try {
+      if (typeof localStorage === 'undefined') return false;
       localStorage.setItem(key, JSON.stringify(value));
       return true;
     } catch (error) {

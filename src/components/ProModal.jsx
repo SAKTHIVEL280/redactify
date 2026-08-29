@@ -61,10 +61,16 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
                 key: verifyData.licenseKey,
                 orderId: response.razorpay_order_id,
                 paymentId: response.razorpay_payment_id,
-                purchasedAt: new Date().toISOString()
+                purchasedAt: verifyData.purchasedAt || new Date().toISOString(),
+                type: verifyData.type || 'pro_lifetime',
+                signature: verifyData.signature
               };
 
-              await storeProKey(licenseData);
+              const storeRes = await storeProKey(licenseData);
+              if (!storeRes.success) {
+                setError(storeRes.error || 'Failed to verify license signature.');
+                return;
+              }
               setSavedLicenseData(licenseData);
               setShowEmailPrompt(true);
             } else {
@@ -101,6 +107,8 @@ const ProModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       await axios.post('/api/save-license-email', {
         licenseKey: savedLicenseData.key,
+        paymentId: savedLicenseData.paymentId,
+        signature: savedLicenseData.signature,
         email: normalizedEmail,
       });
       if (onSuccess) onSuccess(savedLicenseData);

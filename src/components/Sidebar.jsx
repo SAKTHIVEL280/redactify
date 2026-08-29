@@ -351,6 +351,10 @@ function Sidebar({ piiItems, onTogglePII, onBulkSetPII, originalText, onUpgradeC
               {!isPro && !exporting && <span className="text-[8px] uppercase tracking-wider font-bold text-red-500 font-mono">Pro</span>}
             </button>
           </div>
+
+          <p className="text-[10px] text-zinc-500 text-center leading-tight pt-1">
+            Redactify is an assistive tool. Always inspect the preview before sharing confidential files.
+          </p>
         </div>
       </div>
     </div>
